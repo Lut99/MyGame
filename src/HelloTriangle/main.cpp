@@ -4,7 +4,7 @@
  * Created:
  *   16/12/2020, 13:34:59
  * Last edited:
- *   16/12/2020, 16:30:12
+ *   16/12/2020, 17:32:34
  * Auto updated?
  *   Yes
  *
@@ -112,7 +112,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
     }
 
     // Write the message, with the correct prefixes
-    std::cerr << VULKAN << log_prefix << pCallbackData->pMessage << " (" << log_type << ")" << std::endl;
+    std::cerr << log_prefix << VULKAN << pCallbackData->pMessage << " (" << log_type << ")" << std::endl;
     return VK_FALSE;
 }
 #endif
@@ -125,12 +125,26 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
 struct DeviceQueueSupport {
     /* Marks whether or not the device supports graphics capabilities. */
     bool supports_graphics;
+    /* Marks whether or not the device supports presenting to our given surface. */
+    bool supports_presenting;
 
     /* If it has a value, then the device supports graphics queues. */
     uint32_t graphics;
+    /* If it is supported, then this value stores the queue family index. */
+    uint32_t presenting;
 
     /* Returns true if all interesting queues have been found, or false otherwise. */
-    inline bool is_supported() const { return supports_graphics; }
+    inline bool is_supported() const { return supports_graphics && supports_presenting; }
+};
+
+/* Struct that is used to examine if the swap chain supports what we want. */
+struct SwapChainSupport {
+    /* Lists the capabilities of our swap chain in Vulkan-terms. */
+    VkSurfaceCapabilitiesKHR capabalities;
+    /* Lists the formats (i.e., pixel colour space etc) that the swap chain supports. */
+    std::vector<VkSurfaceFormatKHR> formats;
+    /* Lists the presentation modes that the swap chain supports. */
+    std::vector<VkPresentModeKHR> presentModes;
 };
 
 
@@ -141,22 +155,31 @@ struct DeviceQueueSupport {
 /* Class that wraps our application. */
 class HelloTriangleApplication {
 private:
+    /* Extensions that we require to be enabled on the GPU. */
+    std::vector<const char*> device_extensions;
+    /* Validation layers enabled when the DEBUG-flag is specified. */
+    std::vector<const char*> validation_layers;
+
     /* The Window */
     GLFWwindow* window;
     /* The Vulkan instance */
     VkInstance instance;
-    /* Validation layers enabled when the DEBUG-flag is specified. */
-    std::vector<const char*> validation_layers;
+    /* The surface area, which we can use to draw on. */
+    VkSurfaceKHR surface;
+
     #ifdef DEBUG
     /* The debug messenger of Vulkan. */
     VkDebugUtilsMessengerEXT debug_messenger;
     #endif
+
     /* The physical device that we'll be using. */
     VkPhysicalDevice gpu;
     /* The logical device that we'll be using. */
     VkDevice device;
     /* Handle to the graphics queue that we'll be using. */
     VkQueue graphics_queue;
+    /* Handle for the presentations queue that we'll be using. */
+    VkQueue present_queue;
 
 
 
@@ -363,6 +386,45 @@ private:
 
 
 
+    /* Initializes the surface we'll draw on. */
+    VkSurfaceKHR create_surface() {
+        // Simply create it, done
+        VkSurfaceKHR result;
+        if (glfwCreateWindowSurface(this->instance, this->window, nullptr, &result) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not create window surface");
+        }
+        return result;
+    }
+
+
+
+    /* Returns the support details of the swap chain of the chosen device. */
+    SwapChainSupport get_swapchain_support(VkPhysicalDevice gpu) {
+        SwapChainSupport result;
+
+        // First, get the capabilities of the given gpu
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, this->surface, &result.capabalities);
+
+        // Next, we get the surface formats by the familiar count/properties call
+        uint32_t n_formats = 0;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, this->surface, &n_formats, nullptr);
+        if (n_formats != 0) {
+            result.formats.resize(n_formats);
+            vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, this->surface, &n_formats, result.formats.data());
+        }
+
+        // Finally, to get the presentation modes we do the same joke
+        uint32_t n_modes = 0;
+        vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, this->surface, &n_modes, nullptr);
+        if (n_modes != 0) {
+            result.presentModes.resize(n_modes);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, this->surface, &n_modes, result.presentModes.data());
+        }
+
+        // We're done here
+        return result;
+    }
+    
     /* Examines the type of Vulkan queues that the given device supports. */
     DeviceQueueSupport get_device_queues(VkPhysicalDevice gpu) {
         DeviceQueueSupport result;
@@ -382,26 +444,64 @@ private:
                 result.supports_graphics = true;
                 result.graphics = i;
             }
+
+            // Check if it has presenting support to our surface
+            VkBool32 presenting_support = false;
+            vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, this->surface, &presenting_support);
+            if (presenting_support) {
+                result.supports_presenting = true;
+                result.presenting = i;
+            }
         }
 
         // We're done
         return result;
     }
 
+    /* Examines whether or not the device supports the desired extensions. */
+    bool check_device_extensions(VkPhysicalDevice gpu) {
+        // Count the extensions available on the device
+        uint32_t n_supported_extensions = 0;
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n_supported_extensions, nullptr);
+
+        // Based on the count, get a list of those that are supported
+        VkExtensionProperties supported_extensions[n_supported_extensions];
+        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n_supported_extensions, supported_extensions);
+
+        // Now check if all of our required extensions are supported
+        for (size_t i = 0; i < this->device_extensions.size(); i++) {
+            bool found = false;
+            for (uint32_t j = 0; j < n_supported_extensions; j++) {
+                if (strcmp(this->device_extensions[i], supported_extensions[j].extensionName) == 0) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) { return false; }
+        }
+        return true;
+    }
+
     /* Returns true if given GPU is suitable for our purposes, or false if it isn't. */
     bool is_gpu_suitable(VkPhysicalDevice gpu) {
-        // Get the physical properties of the device
-        VkPhysicalDeviceProperties device_properties;
-        vkGetPhysicalDeviceProperties(gpu, &device_properties);
-        (void) device_properties;
+        // Get the supported queues on this device
+        DeviceQueueSupport queues = get_device_queues(gpu);
 
-        // Also get its features
-        VkPhysicalDeviceFeatures device_features;
-        vkGetPhysicalDeviceFeatures(gpu, &device_features);
-        (void) device_features;
+        // Check whether the device supports the correct extensions
+        bool extensions_supported = check_device_extensions(gpu);
+
+        // Check whether the device has a sufficiently supported swapchain
+        bool swapchain_supported = false;
+        if (extensions_supported) {
+            // Get the swapchain support details on this device
+            SwapChainSupport swapchain = get_swapchain_support(gpu);
+
+            // Examine if they are enough
+            swapchain_supported = !swapchain.formats.empty() && !swapchain.presentModes.empty();
+        }
 
         // Return whether we support the GPU (we do, bc it's a tutorial)
-        return get_device_queues(gpu).is_supported();
+        return queues.is_supported() && extensions_supported && swapchain_supported;
     }
 
     /* Browses and selects a physical device to run our Vulkan application on. */
@@ -439,24 +539,73 @@ private:
         return nullptr;
     }
 
+
+
+    /* Function that chooses the correct format for the swapchain we'll use. */
+    VkSurfaceFormatKHR swapchain_choose_format(const std::vector<VkSurfaceFormatKHR>& swapchain_formats) {
+        // Loop through the formats and see if ours is supported
+        for (size_t i = 0; i < swapchain_formats.size(); i++) {
+            if (swapchain_formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && swapchain_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                // We wanna have that one!
+                return swapchain_formats[i];
+            }
+        }
+
+        // Otherwise, let's just use the first available one (since we'll know there's at least one)
+        return swapchain_formats[0];
+    }
+
+    /* Function that chooses the correct presentation mode for the swapchain we'll use. In particular, it's mostly how refreshrates work. */
+    VkPresentModeKHR swapchain_choose_present_mode(const std::vector<VkPresentModeKHR>& swapchain_modes) {
+        // Loop through the formats and see if ours is supported
+        for (size_t i = 0; i < swapchain_modes.size(); i++) {
+            // We ideally want triple buffering
+            if (swapchain_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+                // We wanna have that one!
+                return swapchain_modes[i];
+            }
+        }
+
+        // Otherwise, we'll go for the one that's guaranteed to be available (basically normal vsync)
+        return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    /* Function that chooses the correct resolution for the swapchain we'll use. */
+    VkExtent2D swapchain_choose_resolution(const VkSurfaceCapabilitiesKHR& capabilities) {
+        /* TBD */
+        /* https://vulkan-tutorial.com/en/Drawing_a_triangle/Presentation/Swap_chain */
+    }
+
     /* Prepares the logical device we'll use. */
-    VkDevice create_device(VkQueue* graphics_queue) {
+    VkDevice create_device(VkQueue* graphics_queue, VkQueue* present_queue) {
         #ifdef DEBUG
         std::cout << INFO "Creating logical device..." << std::endl;
         #endif
 
+        // Get the queue indices supported by the device (which is guaranteed to be enough)
+        DeviceQueueSupport device_queues = get_device_queues(this->gpu);
+        size_t n_queues = 2;
+        uint32_t queue_indices[] = { device_queues.graphics, device_queues.presenting };
+
+        // If they are the same queue, merge them together and only define it as one
+        if (queue_indices[0] == queue_indices[1]) {
+            n_queues = 1;
+        }
+
         // First, we'll define the queues we'll use for this logical device
-        DeviceQueueSupport queues = get_device_queues(this->gpu);
-        VkDeviceQueueCreateInfo queue_createInfo{};
-        // Remember that we always need to specify the struct type
-        queue_createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        // Set the index to the graphics queue we found
-        queue_createInfo.queueFamilyIndex = queues.graphics;
-        // Set how many queues we'll want to create
-        queue_createInfo.queueCount = 1;
-        // Set the priority of each queue (note that it's passed as a list)
-        float queue_priority = 1.0f;
-        queue_createInfo.pQueuePriorities = &queue_priority;
+        VkDeviceQueueCreateInfo queues[n_queues];
+        for (size_t i = 0; i < n_queues; i++) {
+            queues[i] = {};
+            // Remember that we always need to specify the struct type
+            queues[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            // Set the index to the graphics queue we found
+            queues[i].queueFamilyIndex = queue_indices[i];
+            // Set how many queues we'll want to create
+            queues[i].queueCount = 1;
+            // Set the priority of each queue (note that it's passed as a list)
+            float queue_priority = 1.0f;
+            queues[i].pQueuePriorities = &queue_priority;
+        }
 
         // Next, define the specific set of feature's we'll require (empty for now)
         VkPhysicalDeviceFeatures device_features{};
@@ -465,12 +614,16 @@ private:
         VkDeviceCreateInfo createInfo{};
         // Remember that we always need to specify the struct type
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        // Specify that we only want n_queues queue families
+        createInfo.queueCreateInfoCount = n_queues;
         // Add the queue info we created above
-        createInfo.pQueueCreateInfos = &queue_createInfo;
-        // Specify that we only want one queue family
-        createInfo.queueCreateInfoCount = 1;
+        createInfo.pQueueCreateInfos = queues;
         // Also pass the features to the createInfo struct
         createInfo.pEnabledFeatures = &device_features;
+        // Mark the number of extensions we want to be enabled
+        createInfo.enabledExtensionCount = static_cast<uint32_t>(this->device_extensions.size());
+        // Mark the extensions themselves we want to be enabled
+        createInfo.ppEnabledExtensionNames = device_extensions.data();
         #ifdef DEBUG
         // Set the device's validation layers (not really needed anymore, but for backwards capability)
         createInfo.enabledLayerCount = static_cast<uint32_t>(this->validation_layers.size());
@@ -487,7 +640,8 @@ private:
         }
 
         // Finally, set the queue handle before returning
-        vkGetDeviceQueue(result, queues.graphics, 0, graphics_queue);
+        vkGetDeviceQueue(result, queue_indices[0], 0, graphics_queue);
+        vkGetDeviceQueue(result, queue_indices[1], 0, present_queue);
         return result;
     }
 
@@ -503,12 +657,15 @@ private:
         this->debug_messenger = this->init_vulkan_debug();
         #endif
 
+        // Setup the surface we'll use
+        this->surface = this->create_surface();
+
         // Be sure to pick a valid GPU with all of our requirements
         this->gpu = this->pick_gpu();
         if (this->gpu == nullptr) {
             throw std::runtime_error(ERROR "No suitable Vulkan-supported GPUs found");
         }
-        this->device = this->create_device(&this->graphics_queue);
+        this->device = this->create_device(&this->graphics_queue, &this->present_queue);
     }
 
 public:
@@ -518,7 +675,8 @@ public:
     const size_t wheight;
 
     /* Constructor for the HelloTriangleApplication class, which takes the size of the window and which validation layers to add in case DEBUG is defined. */
-    HelloTriangleApplication(size_t width = 800, size_t height = 600, const std::vector<const char*>& validation_layers = {"VK_LAYER_KHRONOS_validation"}) :
+    HelloTriangleApplication(size_t width = 800, size_t height = 600, const std::vector<const char*>& device_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME }, const std::vector<const char*>& validation_layers = {"VK_LAYER_KHRONOS_validation"}) :
+        device_extensions(device_extensions),
         validation_layers(validation_layers),
         wwidth(width),
         wheight(height)
@@ -544,6 +702,8 @@ public:
         // Be sure to destroy the logical device first
         vkDestroyDevice(this->device, nullptr);
         
+        // Destroy the Vulkan surface
+        vkDestroySurfaceKHR(this->instance, this->surface, nullptr);
         #ifdef DEBUG
         // First clean up the messenger
         DestroyDebugUtilsMessengerEXT(this->instance, this->debug_messenger, nullptr);
@@ -586,5 +746,6 @@ int main() {
         std::cout << e.what() << std::endl;
         return EXIT_FAILURE;
     }
+    std::cout << INFO "Done." << std::endl;
     return EXIT_SUCCESS;
 }
