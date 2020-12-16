@@ -4,7 +4,7 @@
  * Created:
  *   16/12/2020, 13:34:59
  * Last edited:
- *   16/12/2020, 17:32:34
+ *   16/12/2020, 23:55:30
  * Auto updated?
  *   Yes
  *
@@ -16,6 +16,7 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <cstdlib>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
@@ -174,12 +175,24 @@ private:
 
     /* The physical device that we'll be using. */
     VkPhysicalDevice gpu;
+    
     /* The logical device that we'll be using. */
     VkDevice device;
     /* Handle to the graphics queue that we'll be using. */
     VkQueue graphics_queue;
     /* Handle for the presentations queue that we'll be using. */
     VkQueue present_queue;
+
+    /* The swapchain that we're going to write frames to. */
+    VkSwapchainKHR swapchain;
+    /* Handle to all the images in the swapchain. */
+    std::vector<VkImage> swapchain_frames;
+    /* Handle to imageviews to the swapchain images, s.t. we can comfortable work with them. */
+    std::vector<VkImageView> swapchain_frameviews;
+    /* The format of the swapchain, i.e., the color space and format. */
+    VkFormat swapchain_format;
+    /* The extent of the swapchain, i.e., the resolution of its frames. */
+    VkExtent2D swapchain_extent;
 
 
 
@@ -230,9 +243,13 @@ private:
 
         // Start by getting a list of all supported extensions (first just the number, then the list)
         uint32_t n_existing_extensions = 0;
-        vkEnumerateInstanceExtensionProperties(nullptr, &n_existing_extensions, nullptr);
+        if (vkEnumerateInstanceExtensionProperties(nullptr, &n_existing_extensions, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not get supported extensions (count).");
+        }
         VkExtensionProperties existing_extensions[n_existing_extensions];
-        vkEnumerateInstanceExtensionProperties(nullptr, &n_existing_extensions, existing_extensions);
+        if (vkEnumerateInstanceExtensionProperties(nullptr, &n_existing_extensions, existing_extensions) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not get supported extensions.");
+        }
 
         // Loop to find any missing ones
         bool errored = false;
@@ -264,11 +281,15 @@ private:
 
         // First, get the number of layers
         uint32_t n_layers = 0;
-        vkEnumerateInstanceLayerProperties(&n_layers, nullptr);
+        if (vkEnumerateInstanceLayerProperties(&n_layers, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not get supported validation layers (count).");
+        }
 
         // Extend that to get layer information
         VkLayerProperties existing_layers[n_layers];
-        vkEnumerateInstanceLayerProperties(&n_layers, existing_layers);
+        if (vkEnumerateInstanceLayerProperties(&n_layers, existing_layers) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not get supported validation layers.");
+        }
 
         // Now, remove the ones that aren't supported
         for (std::vector<const char*>::iterator iter = this->validation_layers.begin(); iter != this->validation_layers.end(); iter++) {
@@ -403,22 +424,32 @@ private:
         SwapChainSupport result;
 
         // First, get the capabilities of the given gpu
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, this->surface, &result.capabalities);
+        if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, this->surface, &result.capabalities) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Failed to get surface capabilities of the physical device.");
+        }
 
         // Next, we get the surface formats by the familiar count/properties call
         uint32_t n_formats = 0;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, this->surface, &n_formats, nullptr);
+        if (vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, this->surface, &n_formats, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Failed to get surface format (count) of the physical device.");
+        }
         if (n_formats != 0) {
             result.formats.resize(n_formats);
-            vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, this->surface, &n_formats, result.formats.data());
+            if (vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, this->surface, &n_formats, result.formats.data()) != VK_SUCCESS) {
+                throw std::runtime_error(ERROR "Failed to get surface format of the physical device.");
+            }
         }
 
         // Finally, to get the presentation modes we do the same joke
         uint32_t n_modes = 0;
-        vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, this->surface, &n_modes, nullptr);
+        if (vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, this->surface, &n_modes, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Failed to get surface present mode (count) of the physical device.");
+        }
         if (n_modes != 0) {
             result.presentModes.resize(n_modes);
-            vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, this->surface, &n_modes, result.presentModes.data());
+            if (vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, this->surface, &n_modes, result.presentModes.data()) != VK_SUCCESS) {
+                throw std::runtime_error(ERROR "Failed to get surface present mode of the physical device.");
+            }
         }
 
         // We're done here
@@ -446,8 +477,10 @@ private:
             }
 
             // Check if it has presenting support to our surface
-            VkBool32 presenting_support = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, this->surface, &presenting_support);
+            VkBool32 presenting_support = VK_FALSE;
+            if (vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, this->surface, &presenting_support) != VK_SUCCESS) {
+                throw std::runtime_error(ERROR "Failed to get surface support of the physical device.");
+            }
             if (presenting_support) {
                 result.supports_presenting = true;
                 result.presenting = i;
@@ -462,11 +495,15 @@ private:
     bool check_device_extensions(VkPhysicalDevice gpu) {
         // Count the extensions available on the device
         uint32_t n_supported_extensions = 0;
-        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n_supported_extensions, nullptr);
+        if (vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n_supported_extensions, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not get supported extensions (count) from device.");
+        }
 
         // Based on the count, get a list of those that are supported
         VkExtensionProperties supported_extensions[n_supported_extensions];
-        vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n_supported_extensions, supported_extensions);
+        if (vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n_supported_extensions, supported_extensions) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not get supported extensions from device.");
+        }
 
         // Now check if all of our required extensions are supported
         for (size_t i = 0; i < this->device_extensions.size(); i++) {
@@ -512,7 +549,9 @@ private:
 
         // Start by getting the number of devices available
         uint32_t n_devices = 0;
-        vkEnumeratePhysicalDevices(this->instance, &n_devices, nullptr);
+        if (vkEnumeratePhysicalDevices(this->instance, &n_devices, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Failed to get physical devices (count).");
+        }
 
         // If we didn't find any, throw an error
         if (n_devices == 0) {
@@ -521,7 +560,9 @@ private:
 
         // Otherwise, go on to extact the device information list
         VkPhysicalDevice devices[n_devices];
-        vkEnumeratePhysicalDevices(this->instance, &n_devices, devices);
+        if (vkEnumeratePhysicalDevices(this->instance, &n_devices, devices) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Failed to get physical devices.");
+        }
 
         // Find the first suitable device
         for (uint32_t i = 0; i < n_devices; i++) {
@@ -540,41 +581,6 @@ private:
     }
 
 
-
-    /* Function that chooses the correct format for the swapchain we'll use. */
-    VkSurfaceFormatKHR swapchain_choose_format(const std::vector<VkSurfaceFormatKHR>& swapchain_formats) {
-        // Loop through the formats and see if ours is supported
-        for (size_t i = 0; i < swapchain_formats.size(); i++) {
-            if (swapchain_formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && swapchain_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-                // We wanna have that one!
-                return swapchain_formats[i];
-            }
-        }
-
-        // Otherwise, let's just use the first available one (since we'll know there's at least one)
-        return swapchain_formats[0];
-    }
-
-    /* Function that chooses the correct presentation mode for the swapchain we'll use. In particular, it's mostly how refreshrates work. */
-    VkPresentModeKHR swapchain_choose_present_mode(const std::vector<VkPresentModeKHR>& swapchain_modes) {
-        // Loop through the formats and see if ours is supported
-        for (size_t i = 0; i < swapchain_modes.size(); i++) {
-            // We ideally want triple buffering
-            if (swapchain_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
-                // We wanna have that one!
-                return swapchain_modes[i];
-            }
-        }
-
-        // Otherwise, we'll go for the one that's guaranteed to be available (basically normal vsync)
-        return VK_PRESENT_MODE_FIFO_KHR;
-    }
-
-    /* Function that chooses the correct resolution for the swapchain we'll use. */
-    VkExtent2D swapchain_choose_resolution(const VkSurfaceCapabilitiesKHR& capabilities) {
-        /* TBD */
-        /* https://vulkan-tutorial.com/en/Drawing_a_triangle/Presentation/Swap_chain */
-    }
 
     /* Prepares the logical device we'll use. */
     VkDevice create_device(VkQueue* graphics_queue, VkQueue* present_queue) {
@@ -647,6 +653,191 @@ private:
 
 
 
+    /* Function that chooses the correct format for the swapchain we'll use. */
+    VkSurfaceFormatKHR swapchain_choose_format(const std::vector<VkSurfaceFormatKHR>& swapchain_formats) {
+        // Loop through the formats and see if ours is supported
+        for (size_t i = 0; i < swapchain_formats.size(); i++) {
+            if (swapchain_formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && swapchain_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                // We wanna have that one!
+                return swapchain_formats[i];
+            }
+        }
+
+        // Otherwise, let's just use the first available one (since we'll know there's at least one)
+        return swapchain_formats[0];
+    }
+
+    /* Function that chooses the correct presentation mode for the swapchain we'll use. In particular, it's mostly how refreshrates work. */
+    VkPresentModeKHR swapchain_choose_present_mode(const std::vector<VkPresentModeKHR>& swapchain_modes) {
+        // Loop through the formats and see if ours is supported
+        for (size_t i = 0; i < swapchain_modes.size(); i++) {
+            // We ideally want triple buffering
+            if (swapchain_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+                // We wanna have that one!
+                return swapchain_modes[i];
+            }
+        }
+
+        // Otherwise, we'll go for the one that's guaranteed to be available (basically normal vsync)
+        return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    /* Function that chooses the correct resolution for the swapchain we'll use. */
+    VkExtent2D swapchain_choose_resolution(const VkSurfaceCapabilitiesKHR& capabilities) {
+        // Distinguish between the special UINT32_MAX and just returning the extent in the capabilites (=resolution)
+        if (capabilities.currentExtent.width != UINT32_MAX) {
+            return capabilities.currentExtent;
+        } else {
+            // Get the current size of the window
+            int width, height;
+            glfwGetFramebufferSize(this->window, &width, &height);
+
+            // Store them in a Vulkan extent
+            VkExtent2D actualExtent = {
+                static_cast<uint32_t>(width),
+                static_cast<uint32_t>(height)
+            };
+
+            // Next, update that extend with whichever is larger:
+            //   - The minimum resolution that the swap chain supports
+            //   - The smallest of either the maximum resolution supported by the swap chain or the width currently stored in it
+            // In other words, make sure the resolution is bounded in between the minimum and maximum supported resolution
+            if (actualExtent.width > capabilities.maxImageExtent.width) { actualExtent.width = capabilities.maxImageExtent.width; }
+            if (actualExtent.width < capabilities.minImageExtent.width) { actualExtent.width = capabilities.minImageExtent.width; }
+            if (actualExtent.height > capabilities.maxImageExtent.height) { actualExtent.height = capabilities.maxImageExtent.height; }
+            if (actualExtent.height < capabilities.minImageExtent.height) { actualExtent.height = capabilities.minImageExtent.height; }
+
+            // We're done here too
+            return actualExtent;
+        }
+    }
+
+    /* Creates the swapchain, using the properties as decided in the helper functions above. */
+    VkSwapchainKHR create_swapchain(std::vector<VkImage>* swapchain_frames, VkFormat* swapchain_format, VkExtent2D* swapchain_extent) {
+        // First, get the support details for the currently selected swapchain
+        SwapChainSupport support = get_swapchain_support(this->gpu);
+
+        // Based on that, select the configuration of the swapchain
+        VkSurfaceFormatKHR format = swapchain_choose_format(support.formats);
+        *swapchain_format = format.format;
+        VkPresentModeKHR present_mode = swapchain_choose_present_mode(support.presentModes);
+        *swapchain_extent = swapchain_choose_resolution(support.capabalities);
+
+        // Also specify the maximum number of frames in the chain; we'll set it to the minimum number of images plus 1, unless it goes out-of-bounds
+        uint32_t n_frames = support.capabalities.minImageCount + 1;
+        // Note that 0 is escaped here, as it represents 'no maximum'
+        if (support.capabalities.maxImageCount > 0 && n_frames > support.capabalities.maxImageCount) { n_frames = support.capabalities.maxImageCount; }
+
+        // Armed with the configuration, we can now start constructing the createInfo struct for our swapchain
+        VkSwapchainCreateInfoKHR createInfo{};
+        // As always, pass the struct's type to the sType field
+        createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        // Pass the surface used for this swapChain as well
+        createInfo.surface = this->surface;
+        // Next, tell it how many images it should have
+        createInfo.minImageCount = n_frames;
+        // Also pass the image format (just the format)
+        createInfo.imageFormat = format.format;
+        // And pass the image colourspace (also found in format)
+        createInfo.imageColorSpace = format.colorSpace;
+        // Set the extent of the swapchain
+        createInfo.imageExtent = *swapchain_extent;
+        // Always set to 1 layers, since we won't be creating a 3D-glasses application
+        createInfo.imageArrayLayers = 1;
+        // We'll use the image as a direct render target (other options might be to render it to memory first for post-processing)
+        createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+        // Next, we'll specify how to use the multiple queues we have defined
+        DeviceQueueSupport queues = get_device_queues(this->gpu);
+        if (queues.graphics != queues.presenting) {
+            // Group the two indices into an array
+            uint32_t indices[] = { queues.graphics, queues.presenting };
+
+            // They are different queues, and thus we'll tell the swapchain to let both of them have ownership of the frames
+            createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+            // Tell the swapchain to share it between two queues...
+            createInfo.queueFamilyIndexCount = 2;
+            // ...which are:
+            createInfo.pQueueFamilyIndices = indices;
+        } else {
+            // We can keep it simple, and tell the swapchain to only let the single queue be exclusive owner over the images
+            createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            // We optionally tell it to not share
+            createInfo.queueFamilyIndexCount = 0;
+            // And optionally tell it there is no-one to share with
+            createInfo.pQueueFamilyIndices = nullptr;
+        }
+
+        // We can specify we want a certain transformation in the swapchain (like rotating the image), but since we don't we'll just specify the current transform
+        createInfo.preTransform = support.capabalities.currentTransform;
+        // We can also tell the swapchain how to treat the opacity channel. In most cases, we'll just ignore it
+        createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        // It's finally time to set the present mode
+        createInfo.presentMode = present_mode;
+        // If the cipped property is set to true, then the colours of pixels that are omitted by windows may be arbitrary (i.e., best performance)
+        createInfo.clipped = VK_TRUE;
+        // This can be used to re-optimise the swapchain, but for now we'll leave it be
+        createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+        // It's time to actually construct the VkSwapchain!
+        VkSwapchainKHR result;
+        if (vkCreateSwapchainKHR(this->device, &createInfo, nullptr, &result) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not create swapchain.");
+        }
+
+        // Get the handles from the freshly created swapchain. Note that the swapchain may have more images then we told it told (since we gave a minimum)
+        if (vkGetSwapchainImagesKHR(this->device, result, &n_frames, nullptr) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not get the swap chain frames (count) from the swapchain.");
+        }
+        swapchain_frames->resize(n_frames);
+        if (vkGetSwapchainImagesKHR(this->device, result, &n_frames, swapchain_frames->data()) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not get the swap chain frames from the swapchain.");
+        }
+        
+        // We're done creating the swapchain!
+        return result;
+    }
+
+
+
+    /* Create the image views for every image in the swapchain. */
+    void create_swapchain_views(std::vector<VkImageView>* swapchain_frameviews) {
+        // Make sure there's enough space in the vector
+        swapchain_frameviews->resize(this->swapchain_frames.size());
+
+        // Create a view for each image
+        for (size_t i = 0; i < this->swapchain_frames.size(); i++) {
+            // As always, start with populating the required create info struct
+            VkImageViewCreateInfo createInfo{};
+            // Pass the struct's type to itself
+            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            // Pass a reference to the correct image to the construction struct
+            createInfo.image = this->swapchain_frames[i];
+            // Define how to interpret the images. Since it are output frames, they're 2D
+            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            // Set the image format to that of the swapchain
+            createInfo.format = this->swapchain_format;
+            // Something really sweet is that we can re-map colour channels (for example, to make the image monochrome). For now, though, we'll just use the standard mappings
+            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+            // Next up, we'll tell the imageview what we'll do with the image; since it's output, there's nothing fancy like multiple levels or mipmaps
+            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            createInfo.subresourceRange.baseMipLevel = 0;
+            createInfo.subresourceRange.levelCount = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount = 1;
+
+            // Now, create the image view for this image
+            if (vkCreateImageView(this->device, &createInfo, nullptr, &(*swapchain_frameviews)[i]) != VK_SUCCESS) {
+                throw std::runtime_error(ERROR "Failed to create ImageView for frame " + std::to_string(i) + " in the swapchain.");
+            }
+        }
+    }
+
+
+
     /* Handles initialization of Vulkan. */
     void init_vulkan(const std::vector<const char*>& required_extensions) {
         // First, initialize the library by creating an instance
@@ -666,6 +857,10 @@ private:
             throw std::runtime_error(ERROR "No suitable Vulkan-supported GPUs found");
         }
         this->device = this->create_device(&this->graphics_queue, &this->present_queue);
+
+        // With the device ready, it's time to create a swapchain & its imageviews
+        this->swapchain = this->create_swapchain(&this->swapchain_frames, &this->swapchain_format, &this->swapchain_extent);
+        this->create_swapchain_views(&this->swapchain_frameviews);
     }
 
 public:
@@ -699,7 +894,15 @@ public:
         std::cout << INFO "Cleaning up..." << std::endl;
         #endif
 
-        // Be sure to destroy the logical device first
+        // Since we explicitly created the imageviews, we also need to take them down
+        for (size_t i = 0; i < this->swapchain_frameviews.size(); i++) {
+            vkDestroyImageView(this->device, this->swapchain_frameviews[i], nullptr);
+        }
+
+        // Destroy the swapchain
+        vkDestroySwapchainKHR(this->device, this->swapchain, nullptr);
+
+        // Be sure to destroy the logical device
         vkDestroyDevice(this->device, nullptr);
         
         // Destroy the Vulkan surface
