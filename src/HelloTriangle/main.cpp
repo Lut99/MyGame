@@ -4,7 +4,7 @@
  * Created:
  *   16/12/2020, 13:34:59
  * Last edited:
- *   16/12/2020, 23:55:30
+ *   17/12/2020, 14:29:47
  * Auto updated?
  *   Yes
  *
@@ -16,9 +16,12 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <fstream>
+#include <memory>
 #include <cstdlib>
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
 #include <stdexcept>
 #include <vector>
 #include <unordered_map>
@@ -28,13 +31,41 @@
 /* Prefix for all Vulkan messages. */
 #define VULKAN "[\033[1mVULKAN\033[0m] "
 /* Prefix for each logging message. */
-#define INFO "[\033[36;1m INFO \033[0m] "
+#define INFO "[\033[32;1m  OK  \033[0m] "
 /* Prefix for each warning. */
 #define WARNING "[\033[33;1m WARN \033[0m] "
 /* Prefix for each error. */
 #define ERROR "[\033[31;1m ERRR \033[0m] "
 /* Prefix for each other message. */
 #define EMPTY "         "
+
+
+
+
+
+/***** HELPER FUNCTIONS *****/
+/* Function that loads a shader in it's raw binary form. */
+char* read_shader(const std::string& filename, size_t& n_bytes) {
+    // Open a file handle to read binary data from the file, starting at-the-end (ate)
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        int err = errno;
+        throw std::runtime_error(ERROR "Could not open shader file '" + filename + "': " + std::string(strerror(err)));
+    }
+
+    // Since we start at the end of the file, we know it's size :)
+    n_bytes = file.tellg();
+    // Use that to allocate a buffer (but make sure it's aligned to four bytes, the size of an uint32_t)
+    char* result = new alignas(alignof(const uint32_t)) char[n_bytes];
+
+    // Next, start at the beginning, and read all bytes
+    file.seekg(0);
+    file.read(result, n_bytes);
+    file.close();
+
+    // We're done
+    return result;
+}
 
 
 
@@ -189,10 +220,19 @@ private:
     std::vector<VkImage> swapchain_frames;
     /* Handle to imageviews to the swapchain images, s.t. we can comfortable work with them. */
     std::vector<VkImageView> swapchain_frameviews;
+    /* List of the framebuffers we'll render to. */
+    std::vector<VkFramebuffer> swapchain_framebuffers;
     /* The format of the swapchain, i.e., the color space and format. */
     VkFormat swapchain_format;
     /* The extent of the swapchain, i.e., the resolution of its frames. */
     VkExtent2D swapchain_extent;
+
+    /* One of the render passes that we'll use. */
+    VkRenderPass render_pass;
+    /* Layout of the pipeline, used to change some values dynamically. */
+    VkPipelineLayout pipeline_layout;
+    /* The graphics pipeline we'll use to render! */
+    VkPipeline graphics_pipeline;
 
 
 
@@ -474,6 +514,8 @@ private:
             if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 result.supports_graphics = true;
                 result.graphics = i;
+            } else {
+                result.supports_graphics = false;
             }
 
             // Check if it has presenting support to our surface
@@ -484,6 +526,8 @@ private:
             if (presenting_support) {
                 result.supports_presenting = true;
                 result.presenting = i;
+            } else {
+                result.supports_presenting = false;
             }
         }
 
@@ -714,6 +758,10 @@ private:
 
     /* Creates the swapchain, using the properties as decided in the helper functions above. */
     VkSwapchainKHR create_swapchain(std::vector<VkImage>* swapchain_frames, VkFormat* swapchain_format, VkExtent2D* swapchain_extent) {
+        #ifdef DEBUG
+        std::cout << INFO "Creating swapchain..." << std::endl;
+        #endif
+
         // First, get the support details for the currently selected swapchain
         SwapChainSupport support = get_swapchain_support(this->gpu);
 
@@ -802,6 +850,10 @@ private:
 
     /* Create the image views for every image in the swapchain. */
     void create_swapchain_views(std::vector<VkImageView>* swapchain_frameviews) {
+        #ifdef DEBUG
+        std::cout << INFO "Creating imageview handles for swapchain..." << std::endl;
+        #endif
+
         // Make sure there's enough space in the vector
         swapchain_frameviews->resize(this->swapchain_frames.size());
 
@@ -838,6 +890,403 @@ private:
 
 
 
+    /* Sets up the render passes for our application. */
+    VkRenderPass create_render_pass() {
+        #ifdef DEBUG
+        std::cout << INFO "Creating renderpass..." << std::endl;
+        #endif
+
+        // Start by defining the VkAttachementDescription. We only have one framebuffer with one image, so we also only need one attachment
+        VkAttachmentDescription color_attachment{};
+        // The format is the format of our image
+        color_attachment.format = this->swapchain_format;
+        // We don't do multisampling (yet)
+        color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        // We define what we want to do with the frame when we load it; clear it with a constant (since we'll be adding alphas to it)
+        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        // When writing the image again, we want to store it to be read later (by the monitor, for example)
+        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        // We don't do anything with the stencil buffer, so we couldn't care less
+        color_attachment.stencilLoadOp =VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        // For textures, we have to define the layout of the image at the start and at the end. We don't care what it is when we begin...
+        color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        // ...but when we're done, it must have a presenteable format
+        color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        // We have to define a reference to the attachment above. We use only one subpass, i.e., one reference to the first index
+        VkAttachmentReference color_attachment_ref{};
+        // We reference the first and only attachment (created above)
+        color_attachment_ref.attachment = 0;
+        // We also need to define the layout that the framebuffer has for this subpass. We'll tell it to optimize for colours
+        color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        // Now we combine the reference(s) in a subpass
+        VkSubpassDescription subpass{};
+        // Tell Vulkan to treat it as a graphics pass. In the future (which may be now, who knows) it might support compute passes
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        // Add the color reference as an array
+        subpass.colorAttachmentCount = 1;
+        subpass.pColorAttachments = &color_attachment_ref;
+        // Note that others may be added, which can be used to read from in shaders, multisampling, depth / stencils and passing data to next subpasses
+        
+        // It's now time to create the render pass itself
+        VkRenderPassCreateInfo createInfo{};
+        // Pass its own type
+        createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        // Tell it we have one attachment
+        createInfo.attachmentCount = 1;
+        createInfo.pAttachments = &color_attachment;
+        // Tell it we have one subpass
+        createInfo.subpassCount = 1;
+        createInfo.pSubpasses = &subpass;
+
+        VkRenderPass result;
+        if (vkCreateRenderPass(this->device, &createInfo, nullptr, &result) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not create render pass.");
+        }
+        return result;
+    }
+
+    /* Converts raw shader code into a VkShaderModule object. */
+    VkShaderModule create_shader(char* shader_code, size_t shader_size) {
+        #ifdef DEBUG
+        std::cout << EMPTY "Creating shader of " << shader_size << " bytes..." << std::endl;
+        #endif
+
+        // As always, start by defining the createInfo struct
+        VkShaderModuleCreateInfo createInfo{};
+        // Be sure to pass the struct's type
+        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        // Tell the struct how many bytes we have
+        createInfo.codeSize = shader_size;
+        // Since we aligned the data to uint32_t already, it's time to just reinterpret it and we're done
+        createInfo.pCode = reinterpret_cast<const uint32_t*>(shader_code);
+
+        // Create it
+        VkShaderModule result;
+        if (vkCreateShaderModule(this->device, &createInfo, nullptr, &result) != VK_SUCCESS) {
+            // Return a nullptr instead
+            return nullptr;
+        }
+        return result;
+    }
+
+    /* Finally, it's time to create the graphics pipeline. */
+    VkPipeline create_graphics_pipeline(VkPipelineLayout* pipeline_layout) {
+        #ifdef DEBUG
+        std::cout << INFO "Creating graphics pipeline..." << std::endl;
+        #endif
+
+        /* STEP 1: First we'll treat the 'variable' stages, i.e., the shaders */
+
+        // Start by reading both of our shaders
+        size_t n_vertex_shader_bytes = 0;
+        char* vertex_shader = read_shader("src/HelloTriangle/shaders/bin/vert.spv", n_vertex_shader_bytes);
+        size_t n_fragment_shader_bytes = 0;
+        char* fragment_shader = read_shader("src/HelloTriangle/shaders/bin/frag.spv", n_fragment_shader_bytes);
+
+        // Wrap our shader codes in VkShaderModule objects
+        VkShaderModule vertex_module = create_shader(vertex_shader, n_vertex_shader_bytes);
+        delete[] vertex_shader;
+        if (vertex_module == nullptr) {
+            // Delete the raw bytes
+            delete[] fragment_shader;
+
+            // Throw a tantrum
+            throw std::runtime_error(ERROR "Could not create the vertex shader");
+        }
+        VkShaderModule fragment_module = create_shader(fragment_shader, n_fragment_shader_bytes);
+        delete[] fragment_shader;
+        if (vertex_module == nullptr) {
+            // Delete the already wrapped vertex shader
+            vkDestroyShaderModule(this->device, vertex_module, nullptr);
+
+            // Throw a tantrum
+            throw std::runtime_error(ERROR "Could not create the fragment shader");
+        }
+
+        // Now it's time to insert the shaders into the graphics pipeline. To do this, we'll create a VkPipelineShaderStageCreatInfo struct (geez)
+        VkPipelineShaderStageCreateInfo vert_stage_info{};
+        // Pass the struct's type
+        vert_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        // Mark that this stage info is for the vertex stage
+        vert_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        // Pass the module that we'll be using
+        vert_stage_info.module = vertex_module;
+        // Tell it which function to use as entrypoint (neat!)
+        vert_stage_info.pName = "main";
+        // Optionally, we can tell it to set specific constants before we are going to compile it further (we won't now, though)
+        vert_stage_info.pSpecializationInfo = nullptr;
+
+        // Also create a shader stage info for our fragment shader
+        VkPipelineShaderStageCreateInfo frag_stage_info{};
+        // Pass the struct's type
+        frag_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        // Mark that this stage info is for the fragment stage
+        frag_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        // Pass the module that we'll be using
+        frag_stage_info.module = fragment_module;
+        // Tell it which function to use as entrypoint (neat!)
+        frag_stage_info.pName = "main";
+        // Optionally, we can tell it to set specific constants before we are going to compile it further (we won't now, though)
+        frag_stage_info.pSpecializationInfo = nullptr;
+
+        // We'll compess the two shader stages in a short array
+        VkPipelineShaderStageCreateInfo shader_stages[] = { vert_stage_info, frag_stage_info };
+
+
+
+        /* STEP 2: Now we'll treat the fixed stages. */
+
+        // First, we'll define the vertex input for our pipeline. Since we don't have any (yet), we tell so to the pipeline
+        VkPipelineVertexInputStateCreateInfo vertex_input_info{};
+        // As always, set the struct's type
+        vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        // Tell it that we don't have any description for the input data
+        vertex_input_info.vertexBindingDescriptionCount = 0;
+        // Optionally tell it again by providing a nullptr
+        vertex_input_info.pVertexBindingDescriptions = nullptr;
+        // Tell it that we don't have any attributes for the input data
+        vertex_input_info.vertexAttributeDescriptionCount = 0;
+        // Optionally tell it again by providing a nullptr
+        vertex_input_info.pVertexAttributeDescriptions = nullptr;
+
+        // Next, we'll tell the pipeline what to do with the vertices we give it. We'll be using meshes, so we'll tell it to draw triangles between every set of three points given
+        VkPipelineInputAssemblyStateCreateInfo input_assembly_info{};
+        // As always, set the struct's type
+        input_assembly_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        // This is where we tell it to treat if as a list of triangles
+        input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        // Here we tell it not to restart, which I think means that we can't change topology halfway through
+        input_assembly_info.primitiveRestartEnable = VK_FALSE;
+
+        // Next, we define where to write to in the viewport. Note that we pretty much always write to the entire viewport.
+        VkViewport viewport{};
+        // No type needed, interestingly enough, but instead we tell it to start at the left...
+        viewport.x = 0.0f;
+        // ...top corner...
+        viewport.y = 0.0f;
+        // ...and continue to the right...
+        viewport.width = (float) this->swapchain_extent.width;
+        // ...bottom of the viewport
+        viewport.height = (float) this->swapchain_extent.height;
+        // Then, set the minimum depth to the standard value of 0.0
+        viewport.minDepth = 0.0f;
+        // And the maximum depth to the standard value of 1.0
+        viewport.maxDepth = 1.0f;
+
+        // While the viewport is used to scale the the rectangle, we can use a scissor rectangle to cut it. This, too, we'll set to the size of the viewport
+        VkRect2D scissor{};
+        // No type either, instead we immediately set the xy
+        scissor.offset = {0, 0};
+        // And then the size of the rectangle
+        scissor.extent = this->swapchain_extent;
+
+        // We'll now combine the viewport and scissor into a viewport state. Note that multiple viewports can be used on some cards, but we'll use just one
+        VkPipelineViewportStateCreateInfo viewport_state_info{};
+        // This does require its own type again
+        viewport_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        // Tell it how many viewports we're using
+        viewport_state_info.viewportCount = 1;
+        // Give it an "array" of viewports to use
+        viewport_state_info.pViewports = &viewport;
+        // Similarly, tell it to use only one scissor rect
+        viewport_state_info.scissorCount = 1;
+        // Give it an "array" of scissor rects to use
+        viewport_state_info.pScissors = &scissor;
+
+        // Next, we'll initialize the rasterizer, which can do some wizard graphics stuff I don't know yet
+        VkPipelineRasterizationStateCreateInfo rasterizer_info{};
+        // Give it it's type
+        rasterizer_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        // Do not tell it to clamp depths (whatever that may be)
+        rasterizer_info.depthClampEnable = VK_FALSE;
+        // If this value is set to true, then the rasterizer is the last step of the pipeline as it discards EVERYTHING
+        rasterizer_info.rasterizerDiscardEnable = VK_FALSE;
+        // Tells the rasterizer what to do with a polygon. Can either fill it, draw the lines or just to points of it. Note that non-fill requires a GPU feature to be enabled.
+        rasterizer_info.polygonMode = VK_POLYGON_MODE_FILL;
+        // We tell the rasterizer how thicc it's lines need to be. >= 1.0? Needs a GPU feature enabled!
+        rasterizer_info.lineWidth = 1.0f;
+        // Next, tell the rasterizer how to 'cull'; i.e., whether it should remove no sides of all objects, the front side, the backside or no side
+        rasterizer_info.cullMode = VK_CULL_MODE_BACK_BIT;
+        // Determines how the rasterizer knows if it's a front or back. Can be clockwise or counterclockwise (however that may work)
+        rasterizer_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        // We won't do anything depth-related for now, so the next four values are just set to 0 and false etc
+        rasterizer_info.depthBiasEnable = VK_FALSE;
+        rasterizer_info.depthBiasConstantFactor = 0.0f; // Optional
+        rasterizer_info.depthBiasClamp = 0.0f; // Optional
+        rasterizer_info.depthBiasSlopeFactor = 0.0f; // Optional
+
+        // Next, we'll look at multisampling; for now, we won't do that yet (since we only have a single triangle anyway and a very simple scene)
+        VkPipelineMultisampleStateCreateInfo multisampling_info{};
+        // Give it it's type
+        multisampling_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        // Tell it not to multisample shadows?
+        multisampling_info.sampleShadingEnable = VK_FALSE;
+        // We'll only sample once
+        multisampling_info.rasterizationSamples =VK_SAMPLE_COUNT_1_BIT;
+        // Tell it to sample a minimum of 1 times (optional)
+        multisampling_info.minSampleShading = 1.0f;
+        // The mask of sampling is nothing either (optional)
+        multisampling_info.pSampleMask = nullptr;
+        // Tell it not to enable some alpha-related stuff
+        multisampling_info.alphaToCoverageEnable = VK_FALSE;
+        // Tell it not to enable some alpha-related stuff
+        multisampling_info.alphaToOneEnable = VK_FALSE;
+
+        // Next, we'll talk colour blending; how should the pipeline combine the result of the fragment shader with what is already in the buffer?
+        // The first struct is used on a per-framebuffer basis
+        VkPipelineColorBlendAttachmentState colorblend_attachement{};
+        // Don't tell it it's type but to tell it which colors to write
+        colorblend_attachement.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        // Tell it to blend (true) or overwrite with the new value (false). Let's choose true, to blend alpha channels
+        colorblend_attachement.blendEnable = VK_TRUE;
+        // The factor to blend with (i.e., ratio of color used) of the source; we'll use the alpha channel for that
+        colorblend_attachement.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        // The factor to blend with the destination color (the one already there) is precisely the inverse
+        colorblend_attachement.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        // We tell the pipeline to combine the two colours using a simple add-operation (since they're inverse anyway)
+        colorblend_attachement.colorBlendOp = VK_BLEND_OP_ADD;
+        // Next, we copy the alpha color of the source colour (i.e., the one given by the fragment shader)
+        colorblend_attachement.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        // That means we won't use the destination alpha at all
+        colorblend_attachement.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        // Finally, how do we merge the alpha colours?
+        colorblend_attachement.alphaBlendOp = VK_BLEND_OP_ADD;
+
+        // The second struct for color blending is used to group all the states for each framebuffer
+        VkPipelineColorBlendStateCreateInfo colorblend_info{};
+        // Once more we pass the struct's own type
+        colorblend_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        // We tell the pipeline not to blend at all using logical operators between the buffers. Setting this to true would have overridden the per-buffer settings
+        colorblend_info.logicOpEnable = VK_FALSE;
+        // It doesn't matter which logic operation we pass to the struct, since it's disabled
+        colorblend_info.logicOp = VK_LOGIC_OP_COPY;
+        // What is important is passing information per frame buffer (of which we have one)
+        colorblend_info.attachmentCount = 1;
+        colorblend_info.pAttachments = &colorblend_attachement;
+        // The next few constants are also irrelevent now no logic compying is done
+        colorblend_info.blendConstants[0] = 0.0f;
+        colorblend_info.blendConstants[1] = 0.0f;
+        colorblend_info.blendConstants[2] = 0.0f;
+        colorblend_info.blendConstants[3] = 0.0f;
+
+        // Now it's time to look at the layout of our pipeline. This is used to be able to change shader constants at draw time rather than compile time
+        VkPipelineLayoutCreateInfo pipeline_layout_info{};
+        // Pass it's type
+        pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        // For now, we just set everything to empty, since we don't do any fancy dynamic stuff yet
+        pipeline_layout_info.setLayoutCount = 0;
+        pipeline_layout_info.pSetLayouts = nullptr;
+        pipeline_layout_info.pushConstantRangeCount = 0;
+        pipeline_layout_info.pPushConstantRanges = nullptr;
+
+        // Actually create the VkPipelineLayout struct now
+        if (vkCreatePipelineLayout(this->device, &pipeline_layout_info, nullptr, pipeline_layout) != VK_SUCCESS) {
+            // Delete the shader modules
+            vkDestroyShaderModule(this->device, vertex_module, nullptr);
+            vkDestroyShaderModule(this->device, fragment_module, nullptr);
+
+            // Do the error
+            throw std::runtime_error(ERROR "Could not create the pipeline layout.");
+        }
+
+
+
+        /* STEP 3: Create the pipeline! */
+
+        // We start, as always, by defining the struct
+        VkGraphicsPipelineCreateInfo pipeline_info{};
+        // Let it know what it is
+        pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        // First, we define the shaders we have
+        pipeline_info.stageCount = 2;
+        pipeline_info.pStages = shader_stages;
+        // Next, we put in all the fixed-stage structs, like..
+        // ...the vertex input (how the vertices look like)
+        pipeline_info.pVertexInputState = &vertex_input_info;
+        // ...the input assembly state (what to do with the vertices)
+        pipeline_info.pInputAssemblyState = &input_assembly_info;
+        // ...how the viewport looks like
+        pipeline_info.pViewportState = &viewport_state_info;
+        // ...how to rasterize the vertices
+        pipeline_info.pRasterizationState = &rasterizer_info;
+        // ...if we do multisampling
+        pipeline_info.pMultisampleState = &multisampling_info;
+        // ...if we do something with depths and stencils (which we don't)
+        pipeline_info.pDepthStencilState = nullptr;
+        // ...how to go about merging the new frame with an old one
+        pipeline_info.pColorBlendState = &colorblend_info;
+        // ...and if there are any dynamic states (which there aren't)
+        pipeline_info.pDynamicState = nullptr;
+        // Next, we define the layout of the pipeline (not a pointer)
+        pipeline_info.layout = *pipeline_layout;
+        // Now, we define the renderpass we'll use
+        pipeline_info.renderPass = this->render_pass;
+        // And which of the subpasses to start with
+        pipeline_info.subpass = 0;
+        // There is no 'base' pipeline, which could optionally be used to make creation of pipelines which are mostly the same easier
+        pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
+        // Similarly, we have no index for the base pipeline since there is none
+        pipeline_info.basePipelineIndex = -1;
+
+        // Create the pipeline struct!
+        VkPipeline result;
+        // Note that it can be used to create multiple pipelines at once. The null handle can be used to give a cache, to store pipelines in between program executions (neat!)
+        if (vkCreateGraphicsPipelines(this->device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &result) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not create the graphics pipeline.");
+        }
+
+
+
+        /* STEP 4: Cleanup. */
+        vkDestroyShaderModule(this->device, vertex_module, nullptr);
+        vkDestroyShaderModule(this->device, fragment_module, nullptr);
+
+        // We're done!
+        return result;
+    }
+
+
+
+    /* Next up is creating the framebuffer for our app. */
+    void create_framebuffers(std::vector<VkFramebuffer>* swapchain_framebuffers) {
+        #ifdef DEBUG
+        std::cout << INFO "Creating framebuffers..." << std::endl;
+        #endif
+
+        // First, we'll make sure the buffer has enough space
+        swapchain_framebuffers->resize(this->swapchain_frameviews.size());
+
+        // Next, we'll create an imagebuffer for each imageview
+        for (size_t i = 0; i < this->swapchain_frameviews.size(); i++) {
+            // Put it in a local buffer for some reason?
+            VkImageView attachments[] = { this->swapchain_frameviews[i] };
+
+            // Create the createInfo struct for the framebuffer
+            VkFramebufferCreateInfo createInfo{};
+            createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            // Link a renderpass to this framebuffer
+            createInfo.renderPass = this->render_pass;
+            // Attach the imageviews
+            createInfo.attachmentCount = 1;
+            createInfo.pAttachments = attachments;
+            // Specify the size of the framebuffer (i.e., the size of the imageviews)
+            createInfo.width = this->swapchain_extent.width;
+            createInfo.height = this->swapchain_extent.height;
+            // Specify how many layers there are in this image (again, will likely always be 1)
+            createInfo.layers = 1;
+
+            // Create the framebuffer itself
+            if (vkCreateFramebuffer(this->device, &createInfo, nullptr, &((*swapchain_framebuffers)[i])) != VK_SUCCESS) {
+                throw std::runtime_error(ERROR "Could not create framebuffer for imageview with index " + std::to_string(i));
+            }
+        }
+    }
+
+
+
     /* Handles initialization of Vulkan. */
     void init_vulkan(const std::vector<const char*>& required_extensions) {
         // First, initialize the library by creating an instance
@@ -861,6 +1310,15 @@ private:
         // With the device ready, it's time to create a swapchain & its imageviews
         this->swapchain = this->create_swapchain(&this->swapchain_frames, &this->swapchain_format, &this->swapchain_extent);
         this->create_swapchain_views(&this->swapchain_frameviews);
+
+        // Before creating the pipeline, define the render passes first
+        this->render_pass = create_render_pass();
+
+        // Now it's time to create the graphics pipeline!
+        this->graphics_pipeline = create_graphics_pipeline(&this->pipeline_layout);
+
+        // With the graphics pipeline created, it's time to work on the framebuffers
+        create_framebuffers(&this->swapchain_framebuffers);
     }
 
 public:
@@ -893,6 +1351,20 @@ public:
         #ifdef DEBUG
         std::cout << INFO "Cleaning up..." << std::endl;
         #endif
+
+        // Destroy the framebuffers
+        for (size_t i = 0; i < this->swapchain_framebuffers.size(); i++) {
+            vkDestroyFramebuffer(this->device, this->swapchain_framebuffers[i], nullptr);
+        }
+
+        // Destroy the graphics pipeline we created
+        vkDestroyPipeline(this->device, this->graphics_pipeline, nullptr);
+
+        // Clean the pipeline layout
+        vkDestroyPipelineLayout(this->device, this->pipeline_layout, nullptr);
+
+        // Don't forget to destroy the render pass!
+        vkDestroyRenderPass(this->device, this->render_pass, nullptr);
 
         // Since we explicitly created the imageviews, we also need to take them down
         for (size_t i = 0; i < this->swapchain_frameviews.size(); i++) {
