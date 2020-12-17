@@ -4,7 +4,7 @@
  * Created:
  *   16/12/2020, 13:34:59
  * Last edited:
- *   17/12/2020, 14:29:47
+ *   17/12/2020, 16:46:01
  * Auto updated?
  *   Yes
  *
@@ -28,6 +28,9 @@
 
 
 /***** CONSTANTS *****/
+/* The maximum number of frames that we allow to be in-flight at the same time. */
+#define MAX_FRAMES_IN_FLIGHT 2
+
 /* Prefix for all Vulkan messages. */
 #define VULKAN "[\033[1mVULKAN\033[0m] "
 /* Prefix for each logging message. */
@@ -101,7 +104,7 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 
 
 
-/***** DEBUGGING CALLBACKS *****/
+/***** CALLBACKS *****/
 #ifdef DEBUG
 /* Callback for the standard debug case. */
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
@@ -152,6 +155,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
 
 
 
+
 /***** HELPER STRUCTS *****/
 /* Struct that is used to examine the queues present on a given device. */
 struct DeviceQueueSupport {
@@ -191,6 +195,8 @@ private:
     std::vector<const char*> device_extensions;
     /* Validation layers enabled when the DEBUG-flag is specified. */
     std::vector<const char*> validation_layers;
+    /* Signals if a resize occurred or not. */
+    bool framebuffer_resized;
 
     /* The Window */
     GLFWwindow* window;
@@ -234,7 +240,29 @@ private:
     /* The graphics pipeline we'll use to render! */
     VkPipeline graphics_pipeline;
 
+    /* The command pool we'll use to schedule commands on the device. */
+    VkCommandPool command_pool;
+    /* The command buffers where we record what to do. */
+    std::vector<VkCommandBuffer> command_buffers;
 
+    /* The semaphores used to signal that we have obtained one of our images. */
+    std::vector<VkSemaphore> image_available_semaphores;
+    /* The semaphores used to signal that we have rendered one of our images. */
+    std::vector<VkSemaphore> image_rendered_semaphores;
+    /* The fences we'll use to sync the CPU with the GPU. */
+    std::vector<VkFence> in_flight_fences;
+    /* These fences will be used to keep track of if we're using a specific VkImage or not. */
+    std::vector<VkFence> images_in_flight;
+
+
+
+    /* Callback for the window resize. */
+    static void framebuffer_resize_callback(GLFWwindow* window, int, int) {
+        // Get a reference to our class
+        HelloTriangleApplication* app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+        // Mark that we resized
+        app->framebuffer_resized = true;
+    }
 
     /* Handlers initialization of a GLFW window. */
     void init_window() {
@@ -247,11 +275,12 @@ private:
 
         // Next, tell it to create a non-OpenGL window
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        // Also let it automatically handle window resizeing
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
         // Finally, initialize a window in the function
         this->window = glfwCreateWindow(this->wwidth, this->wheight, "Vulkan", nullptr, nullptr);
+        // Register the resize callback after stopping a pointer to our app class in the window
+        glfwSetWindowUserPointer(this->window, (void*) this);
+        glfwSetFramebufferSizeCallback(this->window, HelloTriangleApplication::framebuffer_resize_callback);
     }
 
     
@@ -846,6 +875,61 @@ private:
         return result;
     }
 
+    /* Destructor for all swapchain-related stuff. */
+    void clean_swapchain(bool deallocate_command_buffers = false) {
+        // Destroy the framebuffers
+        for (size_t i = 0; i < this->swapchain_framebuffers.size(); i++) {
+            vkDestroyFramebuffer(this->device, this->swapchain_framebuffers[i], nullptr);
+        }
+
+        // Also remove the command buffers from our pool
+        if (deallocate_command_buffers) {
+            vkFreeCommandBuffers(this->device, this->command_pool, static_cast<uint32_t>(this->command_buffers.size()), this->command_buffers.data());
+        }
+
+        // Destroy the graphics pipeline we created
+        vkDestroyPipeline(this->device, this->graphics_pipeline, nullptr);
+
+        // Clean the pipeline layout
+        vkDestroyPipelineLayout(this->device, this->pipeline_layout, nullptr);
+
+        // Don't forget to destroy the render pass!
+        vkDestroyRenderPass(this->device, this->render_pass, nullptr);
+
+        // Since we explicitly created the imageviews, we also need to take them down
+        for (size_t i = 0; i < this->swapchain_frameviews.size(); i++) {
+            vkDestroyImageView(this->device, this->swapchain_frameviews[i], nullptr);
+        }
+
+        // Destroy the swapchain
+        vkDestroySwapchainKHR(this->device, this->swapchain, nullptr);
+    }
+
+    /* Re-creates the swapchain. */
+    void recreate_swap_chain() {
+        // Wait until the device is idle before we re-do everything
+        vkDeviceWaitIdle(this->device);
+
+        // Clean the old ones up first
+        this->clean_swapchain(true);
+
+        // Re-do everything from the swapchain up (except for the semaphores and the like)
+        this->swapchain = this->create_swapchain(&this->swapchain_frames, &this->swapchain_format, &this->swapchain_extent);
+        this->create_swapchain_views(&this->swapchain_frameviews);
+
+        // Before creating the pipeline, define the render passes first
+        this->render_pass = this->create_render_pass();
+
+        // Now it's time to create the graphics pipeline!
+        this->graphics_pipeline = this->create_graphics_pipeline(&this->pipeline_layout);
+
+        // With the graphics pipeline created, it's time to work on the framebuffers
+        this->create_framebuffers(&this->swapchain_framebuffers);
+
+        // Record the command buffers
+        this->create_command_buffers(&this->command_buffers);
+    }
+
 
 
     /* Create the image views for every image in the swapchain. */
@@ -929,6 +1013,19 @@ private:
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color_attachment_ref;
         // Note that others may be added, which can be used to read from in shaders, multisampling, depth / stencils and passing data to next subpasses
+
+        // Next, create a dependency for this subpass, namely that we have to acquired the image before we can write to it
+        VkSubpassDependency dependency{};
+        // The VK_SUBPASS_EXTERNAL value indicates that we're waiting for the implicit subpass stage before this one
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        // Let it know that we'll start with the first subpass once the dependency is matched
+        dependency.dstSubpass = 0;
+        // Next, we specify that we want to wait for the image-ready event but not for any accessses
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        // Then, we define that we only want to begin when the image is ready to write to
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         
         // It's now time to create the render pass itself
         VkRenderPassCreateInfo createInfo{};
@@ -940,6 +1037,9 @@ private:
         // Tell it we have one subpass
         createInfo.subpassCount = 1;
         createInfo.pSubpasses = &subpass;
+        // Add the dependency to the subphase
+        createInfo.dependencyCount = 1;
+        createInfo.pDependencies = &dependency;
 
         VkRenderPass result;
         if (vkCreateRenderPass(this->device, &createInfo, nullptr, &result) != VK_SUCCESS) {
@@ -1287,6 +1387,137 @@ private:
 
 
 
+    /* Creates the command pool that we'll need to tell the GPU what to do. */
+    VkCommandPool create_command_pool() {
+        // Get the queues available on the device
+        DeviceQueueSupport queues = this->get_device_queues(this->gpu);
+
+        // Create the struct for the pool
+        VkCommandPoolCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        // Bind it to the graphics queue
+        createInfo.queueFamilyIndex = queues.graphics;
+        // Optionally set some flags, but we won't now
+        createInfo.flags = 0;
+
+        // Create the struct
+        VkCommandPool result;
+        if (vkCreateCommandPool(this->device, &createInfo, nullptr, &result) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not create the command pool.");
+        }
+        return result;
+    }
+
+    /* Next up, we'll create the command buffers - one per framebuffer, describing what to do. */
+    void create_command_buffers(std::vector<VkCommandBuffer>* command_buffers) {
+        // Make sure it's sized correctly
+        command_buffers->resize(this->swapchain_framebuffers.size());
+
+        // Create a struct for each buffer, which we can do in one call
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        // Tell it which command pool we allocate the command buffer in
+        allocInfo.commandPool = this->command_pool;
+        // Tell it that this buffer is used to schedule directly to - in contrast, we can also have buffers that accept commands from other, primary command buffers
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        // Finally, tell it how many buffers to allocate
+        allocInfo.commandBufferCount = static_cast<uint32_t>(command_buffers->size());
+
+        // Let's do it
+        if (vkAllocateCommandBuffers(this->device, &allocInfo, command_buffers->data()) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not allocate command buffers (tried to allocate " + std::to_string(command_buffers->size()) + " of them)");
+        }
+
+        // Now, we can begin recording the command buffers
+        for (size_t i = 0; i < command_buffers->size(); i++) {
+            // First, define how we start defining the commands
+            VkCommandBufferBeginInfo beginInfo{};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            // We don't have any flags at this time
+            beginInfo.flags = 0;
+            // Neither do we have any inheritence from other command buffers, as that only applies to secondary command buffers
+            beginInfo.pInheritanceInfo = nullptr;
+
+            // Let's start recording the buffer - note that this resets it, if there was already something in it
+            if (vkBeginCommandBuffer((*command_buffers)[i], &beginInfo) != VK_SUCCESS) {
+                throw std::runtime_error(ERROR "Could not begin recording command buffer " + std::to_string(i));
+            }
+
+            // First, we'll start a render pass
+            VkRenderPassBeginInfo render_pass_info{};
+            render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            // Specify which render pass to begin
+            render_pass_info.renderPass = this->render_pass;
+            // Tell it which framebuffer to use
+            render_pass_info.framebuffer = this->swapchain_framebuffers[i];
+            // Next, we specify what area to write to (the entire area). This is purely for shaders, and note that this means that the frame will be written to & read from for each shader
+            render_pass_info.renderArea.offset = {0, 0};
+            render_pass_info.renderArea.extent = this->swapchain_extent;
+            // Now we'll specify which color to use when clearing the buffer (which we do when loading it) - it'll be fully black
+            VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            render_pass_info.clearValueCount = 1;
+            render_pass_info.pClearValues = &clear_color;
+
+            // Time to start recording it with these configs. The final parameter decides if we execute the parameters in the primary buffer itself (INLINE) or in a secondary buffer.
+            vkCmdBeginRenderPass((*command_buffers)[i], &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+            // Next up, we can bind the graphics pipeline to this render pass (which is a graphics pipeline)
+            vkCmdBindPipeline((*command_buffers)[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphics_pipeline);
+
+            // We have told it how to start and how to render - all we have to tell it is what to render
+            // Here, we pass the following information:
+            //   - The command buffer that should start drawing
+            //   - We technically have three vertices to draw (even though we don't pass them explicitly)
+            //   - We don't do instance rendering (whatever that may be), so we pass 1
+            //   - The first index in the vertex buffer, i.e., the lowest value of gl_VertexIndex in the shaders
+            //   - The first index of the instance buffer, i.e., the lowest value of gl_InstanceIndex in the shaders (not used)
+            vkCmdDraw((*command_buffers)[i], 3, 1, 0, 0);
+
+            // Once it has been drawn, we can end the render pass
+            vkCmdEndRenderPass((*command_buffers)[i]);
+
+            // Finally, time to end the buffer recording and submit it
+            if (vkEndCommandBuffer((*command_buffers)[i]) != VK_SUCCESS) {
+                throw std::runtime_error(ERROR "Failed to record the command buffer " + std::to_string(i));
+            }
+        }
+    }
+
+
+
+    /* Initializes a semaphore. */
+    void create_sync_objects(std::vector<VkSemaphore>* s1, std::vector<VkSemaphore>* s2, std::vector<VkFence>* f1, std::vector<VkFence>* f1prime) {
+        // Be sure to resize the vectors
+        s1->resize(MAX_FRAMES_IN_FLIGHT);
+        s2->resize(MAX_FRAMES_IN_FLIGHT);
+        f1->resize(MAX_FRAMES_IN_FLIGHT);
+        f1prime->resize(this->swapchain_frames.size(), VK_NULL_HANDLE);
+
+        // Create the creation struct for all semaphores
+        VkSemaphoreCreateInfo semaphore_info{};
+        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        // In the future, there may be flags, but not now
+
+        // Create the creation struct for all fences
+        VkFenceCreateInfo fence_info;
+        fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        // Tell it to start in a signalled state
+        fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        fence_info.pNext = nullptr;
+
+        // Let's create all of the semaphores
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            if (vkCreateSemaphore(this->device, &semaphore_info, nullptr, &((*s1)[i])) != VK_SUCCESS || vkCreateSemaphore(this->device, &semaphore_info, nullptr, &((*s2)[i])) != VK_SUCCESS) {
+                throw std::runtime_error(ERROR "Could not create semaphore.");
+            }
+            if (vkCreateFence(this->device, &fence_info, nullptr, &((*f1)[i])) != VK_SUCCESS) {
+                throw std::runtime_error(ERROR "Could not create fence.");
+            }
+        }
+    }
+
+
+
     /* Handles initialization of Vulkan. */
     void init_vulkan(const std::vector<const char*>& required_extensions) {
         // First, initialize the library by creating an instance
@@ -1312,13 +1543,119 @@ private:
         this->create_swapchain_views(&this->swapchain_frameviews);
 
         // Before creating the pipeline, define the render passes first
-        this->render_pass = create_render_pass();
+        this->render_pass = this->create_render_pass();
 
         // Now it's time to create the graphics pipeline!
-        this->graphics_pipeline = create_graphics_pipeline(&this->pipeline_layout);
+        this->graphics_pipeline = this->create_graphics_pipeline(&this->pipeline_layout);
 
         // With the graphics pipeline created, it's time to work on the framebuffers
-        create_framebuffers(&this->swapchain_framebuffers);
+        this->create_framebuffers(&this->swapchain_framebuffers);
+
+        // Create the command pool
+        this->command_pool = this->create_command_pool();
+
+        // Record the command buffers
+        this->create_command_buffers(&this->command_buffers);
+
+        // Create the semaphores
+        this->create_sync_objects(&this->image_available_semaphores, &this->image_rendered_semaphores, &this->in_flight_fences, &this->images_in_flight);
+    }
+
+
+
+    /* Draws a single frame in the given window. */
+    void draw_frame(size_t& current_frame) {
+        // Haha psych, we won't be working here either but first create the semaphores needed for synchronization
+
+        // Wait until the current frame has been processed
+        vkWaitForFences(this->device, 1, &this->in_flight_fences[current_frame], VK_TRUE, UINT64_MAX);
+
+        // Anyway, now that's done, let's pull an image from the swapchain (without ever timeouting). We pass it the first semaphore (but a fence) s.t. we know when it's done
+        uint32_t image_index;
+        VkResult result = vkAcquireNextImageKHR(this->device, this->swapchain, UINT64_MAX, this->image_available_semaphores[current_frame], VK_NULL_HANDLE, &image_index);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || this->framebuffer_resized) {
+            // Try to swap out the swapchain, then early return to re-try
+            this->framebuffer_resized = false;
+            this->recreate_swap_chain();
+            // Make sure the semaphore isn't set
+            vkDestroySemaphore(this->device, this->image_available_semaphores[current_frame], nullptr);
+            // Re-create one
+            VkSemaphoreCreateInfo create_semaphore{};
+            create_semaphore.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            if (vkCreateSemaphore(this->device, &create_semaphore, nullptr, &this->image_available_semaphores[current_frame]) != VK_SUCCESS) { throw std::runtime_error(ERROR "Couldn't re-create semaphore."); }
+            return;
+        } else if (result != VK_SUCCESS) {
+            // We failed
+            throw std::runtime_error(ERROR "Could not obtain image from the swapchain");
+        }
+
+        // Wait until the image is not in use either, and not just the frame
+        if (this->images_in_flight[image_index] != VK_NULL_HANDLE) {
+            vkWaitForFences(this->device, 1, &this->images_in_flight[image_index], VK_TRUE, UINT64_MAX);
+        }
+        // Mark the image as being in use by this frame
+        this->images_in_flight[image_index] = in_flight_fences[current_frame];
+
+        // Next, we'll submit the correct command buffer to draw the triangle
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        // Pass it the semaphores to wait for before starting the command buffer, telling it at which stage in the pipeline to do the waiting
+        VkSemaphore wait_semaphores[] = { this->image_available_semaphores[current_frame] };
+        VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = wait_semaphores;
+        submit_info.pWaitDstStageMask = wait_stages;
+        // Next, define the command buffer to use
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &(this->command_buffers[image_index]);
+        // Now we tell it which semaphore to signal once the command buffer is actually done processing
+        VkSemaphore signal_semaphores[] = { this->image_rendered_semaphores[current_frame] };
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = signal_semaphores;
+
+        // Reset this frame's fence, so that we signal it's in use again
+        vkResetFences(this->device, 1, &in_flight_fences[current_frame]);
+
+        // Now that's done, submit the command buffer to the queue!
+        // Note that we use the fence to be able to say if this frame was done or not, and that we may schedule more than one command buffers at once
+        if (vkQueueSubmit(this->graphics_queue, 1, &submit_info, this->in_flight_fences[current_frame]) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not submit command buffer to the graphics queue");
+        }
+
+        // With the rendering process scheduled, it's now time to define what happens when that's done
+        VkPresentInfoKHR present_info{};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        // Let it specify which semaphore to wait for until beginning
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = signal_semaphores;
+        // Next, define which swapchain we'll present which image to
+        VkSwapchainKHR swap_chains[] = { this->swapchain };
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = swap_chains;
+        present_info.pImageIndices = &image_index;
+        // If we're writing to multiple swapchains, we can use this pointer to let us get a list of results for each of them
+        present_info.pResults = nullptr;
+
+        // Let's present it!
+        result = vkQueuePresentKHR(this->present_queue, &present_info);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || this->framebuffer_resized) {
+            // Try to swap out the swapchain, then early return to re-try
+            this->framebuffer_resized = false;
+            this->recreate_swap_chain();
+            // Make sure the semaphore isn't set
+            vkDestroySemaphore(this->device, this->image_rendered_semaphores[current_frame], nullptr);
+            // Re-create one
+            VkSemaphoreCreateInfo create_semaphore{};
+            create_semaphore.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+            if (vkCreateSemaphore(this->device, &create_semaphore, nullptr, &this->image_rendered_semaphores[current_frame]) != VK_SUCCESS) { throw std::runtime_error(ERROR "Couldn't re-create semaphore."); }
+            return;
+        } else if (result != VK_SUCCESS) {
+            // We failed
+            throw std::runtime_error(ERROR "Could not submit resulting image to the presentation queue");
+        }
+
+        // Increment which frame we're current at (bounded by the maximum we allow in-flight)
+        current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
 public:
@@ -1331,6 +1668,7 @@ public:
     HelloTriangleApplication(size_t width = 800, size_t height = 600, const std::vector<const char*>& device_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME }, const std::vector<const char*>& validation_layers = {"VK_LAYER_KHRONOS_validation"}) :
         device_extensions(device_extensions),
         validation_layers(validation_layers),
+        framebuffer_resized(false),
         wwidth(width),
         wheight(height)
     {
@@ -1352,27 +1690,21 @@ public:
         std::cout << INFO "Cleaning up..." << std::endl;
         #endif
 
-        // Destroy the framebuffers
-        for (size_t i = 0; i < this->swapchain_framebuffers.size(); i++) {
-            vkDestroyFramebuffer(this->device, this->swapchain_framebuffers[i], nullptr);
+        // If we're done, wait until the GPU is finished before starting cleanup etc
+        vkDeviceWaitIdle(this->device);
+
+        // Clean the semaphores
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            vkDestroySemaphore(this->device, this->image_available_semaphores[i], nullptr);
+            vkDestroySemaphore(this->device, this->image_rendered_semaphores[i], nullptr);
+            vkDestroyFence(this->device, this->in_flight_fences[i], nullptr);
         }
 
-        // Destroy the graphics pipeline we created
-        vkDestroyPipeline(this->device, this->graphics_pipeline, nullptr);
+        // Don't forget to destroy the command pool!
+        vkDestroyCommandPool(this->device, this->command_pool, nullptr);
 
-        // Clean the pipeline layout
-        vkDestroyPipelineLayout(this->device, this->pipeline_layout, nullptr);
-
-        // Don't forget to destroy the render pass!
-        vkDestroyRenderPass(this->device, this->render_pass, nullptr);
-
-        // Since we explicitly created the imageviews, we also need to take them down
-        for (size_t i = 0; i < this->swapchain_frameviews.size(); i++) {
-            vkDestroyImageView(this->device, this->swapchain_frameviews[i], nullptr);
-        }
-
-        // Destroy the swapchain
-        vkDestroySwapchainKHR(this->device, this->swapchain, nullptr);
+        // Use our neat function to clean everything swapchain-related
+        this->clean_swapchain();
 
         // Be sure to destroy the logical device
         vkDestroyDevice(this->device, nullptr);
@@ -1400,9 +1732,17 @@ public:
         #endif
 
         // Keep running until the window closed somehow
+        size_t current_frame = 0;
         while (!glfwWindowShouldClose(this->window)) {
+            // Let the window handle events and stuff (and probably handle timing, I think)
             glfwPollEvents();
+
+            // Draw a frame using our TERABYTES of prepared structs
+            this->draw_frame(current_frame);
         }
+
+        // If we're done, wait until the GPU is finished before starting cleanup etc
+        vkDeviceWaitIdle(this->device);
 
         #ifdef DEBUG
         std::cout << INFO "Exiting main loop." << std::endl;
