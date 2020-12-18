@@ -4,7 +4,7 @@
  * Created:
  *   16/12/2020, 13:34:59
  * Last edited:
- *   17/12/2020, 16:46:01
+ *   18/12/2020, 18:19:42
  * Auto updated?
  *   Yes
  *
@@ -12,11 +12,13 @@
  *   File used to follow the hello_triangle tutorial of Vulkan
 **/
 
+#define GLFW_DLL
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <iostream>
 #include <fstream>
+#include <string>
 #include <memory>
 #include <cstdlib>
 #include <cstdlib>
@@ -48,22 +50,25 @@
 
 /***** HELPER FUNCTIONS *****/
 /* Function that loads a shader in it's raw binary form. */
-char* read_shader(const std::string& filename, size_t& n_bytes) {
+std::vector<char> read_shader(const std::string& filename) {
     // Open a file handle to read binary data from the file, starting at-the-end (ate)
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
     if (!file.is_open()) {
         int err = errno;
-        throw std::runtime_error(ERROR "Could not open shader file '" + filename + "': " + std::string(strerror(err)));
+        char buffer[256];
+        strerror_s<256>(buffer, err);
+        throw std::runtime_error(ERROR "Could not open shader file '" + filename + "': " + buffer);
     }
 
     // Since we start at the end of the file, we know it's size :)
-    n_bytes = file.tellg();
+    size_t n_bytes = file.tellg();
     // Use that to allocate a buffer (but make sure it's aligned to four bytes, the size of an uint32_t)
-    char* result = new alignas(alignof(const uint32_t)) char[n_bytes];
+    std::vector<char> result;
+    result.resize(n_bytes);
 
     // Next, start at the beginning, and read all bytes
     file.seekg(0);
-    file.read(result, n_bytes);
+    file.read(result.data(), n_bytes);
     file.close();
 
     // We're done
@@ -78,22 +83,24 @@ char* read_shader(const std::string& filename, size_t& n_bytes) {
 #ifdef DEBUG
 /* Proxy for atomatically loading the vkCreateDebugUtilsMessengerEXT function. */
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
-    PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
         // Call the function
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-    } else {
+    }
+    else {
         // Didn't find it!
         throw std::runtime_error(ERROR "Coult not load vkCreateDebugUtilsMessengerEXT");
     }
 }
 /* Proxy for atomatically loading the vkDestroyDebugUtilsMessengerEXT function. */
 void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
-    PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     if (func != nullptr) {
         // Call the function
         func(instance, debugMessenger, pAllocator);
-    } else {
+    }
+    else {
         // Didn't find it!
         throw std::runtime_error(ERROR "Coult not load vkDestroyDebugUtilsMessengerEXT");
     }
@@ -108,42 +115,42 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 #ifdef DEBUG
 /* Callback for the standard debug case. */
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-                                                    VkDebugUtilsMessageTypeFlagsEXT message_type,
-                                                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-                                                    void*) {
+    VkDebugUtilsMessageTypeFlagsEXT message_type,
+    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+    void*) {
     // Determine the logging prefix based on the 
     const char* log_prefix;
-    switch(message_severity) {
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-            log_prefix = INFO;
-            break;
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-            log_prefix = WARNING;
-            break;
-        case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-            log_prefix = ERROR;
-            break;
-        default:
-            log_prefix = "[????] ";
-            break;
+    switch (message_severity) {
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+        log_prefix = INFO;
+        break;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+        log_prefix = WARNING;
+        break;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+        log_prefix = ERROR;
+        break;
+    default:
+        log_prefix = "[????] ";
+        break;
     }
 
     // Determine what type of message this is
     const char* log_type;
-    switch(message_type) {
-        case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
-            log_type = "GENERAL";
-            break;
-        case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
-            log_type = "VALIDATION";
-            break;
-        case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
-            log_type = "PERFORMANCE";
-            break;
-        default:
-            log_type = "????";
-            break;
+    switch (message_type) {
+    case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
+        log_type = "GENERAL";
+        break;
+    case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
+        log_type = "VALIDATION";
+        break;
+    case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
+        log_type = "PERFORMANCE";
+        break;
+    default:
+        log_type = "????";
+        break;
     }
 
     // Write the message, with the correct prefixes
@@ -181,6 +188,11 @@ struct SwapChainSupport {
     std::vector<VkSurfaceFormatKHR> formats;
     /* Lists the presentation modes that the swap chain supports. */
     std::vector<VkPresentModeKHR> presentModes;
+
+    /* Default constructor for the SwapChainSupport */
+    SwapChainSupport() :
+        capabalities()
+    {}
 };
 
 
@@ -205,14 +217,14 @@ private:
     /* The surface area, which we can use to draw on. */
     VkSurfaceKHR surface;
 
-    #ifdef DEBUG
+#ifdef DEBUG
     /* The debug messenger of Vulkan. */
     VkDebugUtilsMessengerEXT debug_messenger;
-    #endif
+#endif
 
     /* The physical device that we'll be using. */
     VkPhysicalDevice gpu;
-    
+
     /* The logical device that we'll be using. */
     VkDevice device;
     /* Handle to the graphics queue that we'll be using. */
@@ -255,7 +267,6 @@ private:
     std::vector<VkFence> images_in_flight;
 
 
-
     /* Callback for the window resize. */
     static void framebuffer_resize_callback(GLFWwindow* window, int, int) {
         // Get a reference to our class
@@ -266,9 +277,9 @@ private:
 
     /* Handlers initialization of a GLFW window. */
     void init_window() {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Initializing window..." << std::endl;
-        #endif
+#endif
 
         // First, initialize the library
         glfwInit();
@@ -279,11 +290,11 @@ private:
         // Finally, initialize a window in the function
         this->window = glfwCreateWindow(this->wwidth, this->wheight, "Vulkan", nullptr, nullptr);
         // Register the resize callback after stopping a pointer to our app class in the window
-        glfwSetWindowUserPointer(this->window, (void*) this);
+        glfwSetWindowUserPointer(this->window, (void*)this);
         glfwSetFramebufferSizeCallback(this->window, HelloTriangleApplication::framebuffer_resize_callback);
     }
 
-    
+
 
     /* Returns a list of all the extensions we'll require. */
     std::vector<const char*> get_extensions() {
@@ -295,10 +306,10 @@ private:
         // Put them in the result vector
         std::vector<const char*> result(glfw_extensions, glfw_extensions + n_glfw_extensions);
 
-        #ifdef DEBUG
+#ifdef DEBUG
         // Add the extension for our debugging system
         result.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-        #endif
+#endif
 
         // Return the list
         return result;
@@ -306,17 +317,18 @@ private:
 
     /* Checks if all required extensions are present. */
     void check_extensions(const std::vector<const char*>& required_extensions) {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Checking extension support..." << std::endl;
-        #endif
+#endif
 
         // Start by getting a list of all supported extensions (first just the number, then the list)
         uint32_t n_existing_extensions = 0;
         if (vkEnumerateInstanceExtensionProperties(nullptr, &n_existing_extensions, nullptr) != VK_SUCCESS) {
             throw std::runtime_error(ERROR "Could not get supported extensions (count).");
         }
-        VkExtensionProperties existing_extensions[n_existing_extensions];
-        if (vkEnumerateInstanceExtensionProperties(nullptr, &n_existing_extensions, existing_extensions) != VK_SUCCESS) {
+        std::vector<VkExtensionProperties> existing_extensions;
+        existing_extensions.resize(n_existing_extensions);
+        if (vkEnumerateInstanceExtensionProperties(nullptr, &n_existing_extensions, existing_extensions.data()) != VK_SUCCESS) {
             throw std::runtime_error(ERROR "Could not get supported extensions.");
         }
 
@@ -332,9 +344,9 @@ private:
                 }
             }
             if (!found) {
-                #ifdef DEBUG
+#ifdef DEBUG
                 std::cerr << EMPTY WARNING "Extension '" << required_extensions[i] << "' is not supported" << std::endl;
-                #endif
+#endif
                 errored = true;
             }
         }
@@ -343,7 +355,7 @@ private:
 
 
 
-    #ifdef DEBUG
+#ifdef DEBUG
     /* Enables Vulkan's validation layers if the system supports it. */
     void trim_validation_layers() {
         std::cout << EMPTY "Checking validation layer support..." << std::endl;
@@ -355,8 +367,9 @@ private:
         }
 
         // Extend that to get layer information
-        VkLayerProperties existing_layers[n_layers];
-        if (vkEnumerateInstanceLayerProperties(&n_layers, existing_layers) != VK_SUCCESS) {
+        std::vector<VkLayerProperties> existing_layers;
+        existing_layers.resize(n_layers);
+        if (vkEnumerateInstanceLayerProperties(&n_layers, existing_layers.data()) != VK_SUCCESS) {
             throw std::runtime_error(ERROR "Could not get supported validation layers.");
         }
 
@@ -377,15 +390,15 @@ private:
             }
         }
     }
-    #endif
-    
+#endif
 
-    
+
+
     /* Initializes the Vulkan instance, which takes the number of GLFW extensions required and their names */
     VkInstance create_vulkan_instance(const std::vector<const char*>& required_extensions) {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Creating Vulkan instance..." << std::endl;
-        #endif
+#endif
 
         // Define some optional application information, useful for optimizing stuff
         VkApplicationInfo appInfo{};
@@ -412,23 +425,23 @@ private:
         createInfo.enabledExtensionCount = static_cast<uint32_t>(required_extensions.size());
         // ...and which extensions
         createInfo.ppEnabledExtensionNames = required_extensions.data();
-        #ifdef DEBUG
+#ifdef DEBUG
         // Make sure that the list of validation layers is supported
         this->trim_validation_layers();
 
         // Set them in the struct
-        createInfo.enabledLayerCount = this->validation_layers.size();
+        createInfo.enabledLayerCount = static_cast<uint32_t>(this->validation_layers.size());
         createInfo.ppEnabledLayerNames = this->validation_layers.data();
 
         // Additionally, add the debug handler to the createInfo struct s.t. it is debugged properly as well
         VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
         this->populate_vulkan_debug_createInfo(debugCreateInfo);
-        createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debugCreateInfo;
-        #else
+        createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+#else
         // We don't want any layers or debugging information
         createInfo.enabledLayerCount = 0;
         createInfo.pNext = nullptr;
-        #endif
+#endif
 
         // Finally, it's time to make the instance!
         VkInstance result;
@@ -441,7 +454,7 @@ private:
 
 
 
-    #ifdef DEBUG
+#ifdef DEBUG
     /* Populates a given VkDebugUtilsMessengerCreateInfoEXT struct. */
     void populate_vulkan_debug_createInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
         createInfo = {};
@@ -472,7 +485,7 @@ private:
         }
         return result;
     }
-    #endif
+#endif
 
 
 
@@ -524,18 +537,19 @@ private:
         // We're done here
         return result;
     }
-    
+
     /* Examines the type of Vulkan queues that the given device supports. */
     DeviceQueueSupport get_device_queues(VkPhysicalDevice gpu) {
-        DeviceQueueSupport result;
+        DeviceQueueSupport result = DeviceQueueSupport();
 
         // First, get the number of queue families that the device supports
         uint32_t n_queues = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(gpu, &n_queues, nullptr);
 
         // Next, use that number to get a list of the actually supported queue families
-        VkQueueFamilyProperties queues[n_queues];
-        vkGetPhysicalDeviceQueueFamilyProperties(gpu, &n_queues, queues);
+        std::vector<VkQueueFamilyProperties> queues;
+        queues.resize(n_queues);
+        vkGetPhysicalDeviceQueueFamilyProperties(gpu, &n_queues, queues.data());
 
         // Search through those queues to populate our DeviceQueueSupport struct, with an early stop when it already supports everything we like
         for (uint32_t i = 0; !result.is_supported() && i < n_queues; i++) {
@@ -543,7 +557,8 @@ private:
             if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 result.supports_graphics = true;
                 result.graphics = i;
-            } else {
+            }
+            else {
                 result.supports_graphics = false;
             }
 
@@ -555,7 +570,8 @@ private:
             if (presenting_support) {
                 result.supports_presenting = true;
                 result.presenting = i;
-            } else {
+            }
+            else {
                 result.supports_presenting = false;
             }
         }
@@ -573,8 +589,9 @@ private:
         }
 
         // Based on the count, get a list of those that are supported
-        VkExtensionProperties supported_extensions[n_supported_extensions];
-        if (vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n_supported_extensions, supported_extensions) != VK_SUCCESS) {
+        std::vector<VkExtensionProperties> supported_extensions;
+        supported_extensions.resize(n_supported_extensions);
+        if (vkEnumerateDeviceExtensionProperties(gpu, nullptr, &n_supported_extensions, supported_extensions.data()) != VK_SUCCESS) {
             throw std::runtime_error(ERROR "Could not get supported extensions from device.");
         }
 
@@ -616,9 +633,9 @@ private:
 
     /* Browses and selects a physical device to run our Vulkan application on. */
     VkPhysicalDevice pick_gpu() {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Selecting GPU..." << std::endl;
-        #endif
+#endif
 
         // Start by getting the number of devices available
         uint32_t n_devices = 0;
@@ -632,19 +649,20 @@ private:
         }
 
         // Otherwise, go on to extact the device information list
-        VkPhysicalDevice devices[n_devices];
-        if (vkEnumeratePhysicalDevices(this->instance, &n_devices, devices) != VK_SUCCESS) {
+        std::vector<VkPhysicalDevice> devices;
+        devices.resize(n_devices);
+        if (vkEnumeratePhysicalDevices(this->instance, &n_devices, devices.data()) != VK_SUCCESS) {
             throw std::runtime_error(ERROR "Failed to get physical devices.");
         }
 
         // Find the first suitable device
         for (uint32_t i = 0; i < n_devices; i++) {
             if (is_gpu_suitable(devices[i])) {
-                #ifdef DEBUG
+#ifdef DEBUG
                 VkPhysicalDeviceProperties device_properties;
                 vkGetPhysicalDeviceProperties(devices[i], &device_properties);
                 std::cout << EMPTY "Selected GPU '" << device_properties.deviceName << "'" << std::endl;
-                #endif
+#endif
                 return devices[i];
             }
         }
@@ -657,13 +675,13 @@ private:
 
     /* Prepares the logical device we'll use. */
     VkDevice create_device(VkQueue* graphics_queue, VkQueue* present_queue) {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Creating logical device..." << std::endl;
-        #endif
+#endif
 
         // Get the queue indices supported by the device (which is guaranteed to be enough)
         DeviceQueueSupport device_queues = get_device_queues(this->gpu);
-        size_t n_queues = 2;
+        uint32_t n_queues = 2;
         uint32_t queue_indices[] = { device_queues.graphics, device_queues.presenting };
 
         // If they are the same queue, merge them together and only define it as one
@@ -672,9 +690,10 @@ private:
         }
 
         // First, we'll define the queues we'll use for this logical device
-        VkDeviceQueueCreateInfo queues[n_queues];
+        std::vector<VkDeviceQueueCreateInfo> queues;
+        queues.reserve(n_queues);
         for (size_t i = 0; i < n_queues; i++) {
-            queues[i] = {};
+            queues.push_back({});
             // Remember that we always need to specify the struct type
             queues[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             // Set the index to the graphics queue we found
@@ -696,21 +715,21 @@ private:
         // Specify that we only want n_queues queue families
         createInfo.queueCreateInfoCount = n_queues;
         // Add the queue info we created above
-        createInfo.pQueueCreateInfos = queues;
+        createInfo.pQueueCreateInfos = queues.data();
         // Also pass the features to the createInfo struct
         createInfo.pEnabledFeatures = &device_features;
         // Mark the number of extensions we want to be enabled
         createInfo.enabledExtensionCount = static_cast<uint32_t>(this->device_extensions.size());
         // Mark the extensions themselves we want to be enabled
         createInfo.ppEnabledExtensionNames = device_extensions.data();
-        #ifdef DEBUG
+#ifdef DEBUG
         // Set the device's validation layers (not really needed anymore, but for backwards capability)
         createInfo.enabledLayerCount = static_cast<uint32_t>(this->validation_layers.size());
         createInfo.ppEnabledLayerNames = this->validation_layers.data();
-        #else
+#else
         // We're not using any layers
         createInfo.enabledLayerCount = 0;
-        #endif
+#endif
 
         // Armed with the prepared struct, it's time to initialize the device
         VkDevice result;
@@ -760,7 +779,8 @@ private:
         // Distinguish between the special UINT32_MAX and just returning the extent in the capabilites (=resolution)
         if (capabilities.currentExtent.width != UINT32_MAX) {
             return capabilities.currentExtent;
-        } else {
+        }
+        else {
             // Get the current size of the window
             int width, height;
             glfwGetFramebufferSize(this->window, &width, &height);
@@ -787,9 +807,9 @@ private:
 
     /* Creates the swapchain, using the properties as decided in the helper functions above. */
     VkSwapchainKHR create_swapchain(std::vector<VkImage>* swapchain_frames, VkFormat* swapchain_format, VkExtent2D* swapchain_extent) {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Creating swapchain..." << std::endl;
-        #endif
+#endif
 
         // First, get the support details for the currently selected swapchain
         SwapChainSupport support = get_swapchain_support(this->gpu);
@@ -836,7 +856,8 @@ private:
             createInfo.queueFamilyIndexCount = 2;
             // ...which are:
             createInfo.pQueueFamilyIndices = indices;
-        } else {
+        }
+        else {
             // We can keep it simple, and tell the swapchain to only let the single queue be exclusive owner over the images
             createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
             // We optionally tell it to not share
@@ -870,7 +891,7 @@ private:
         if (vkGetSwapchainImagesKHR(this->device, result, &n_frames, swapchain_frames->data()) != VK_SUCCESS) {
             throw std::runtime_error(ERROR "Could not get the swap chain frames from the swapchain.");
         }
-        
+
         // We're done creating the swapchain!
         return result;
     }
@@ -907,6 +928,15 @@ private:
 
     /* Re-creates the swapchain. */
     void recreate_swap_chain() {
+        // If minimized, we'll pause all rendering until the size isn't zero anymore
+        int width = 0;
+        int height = 0;
+        glfwGetFramebufferSize(this->window, &width, &height);
+        while (width == 0 || height == 0) {
+            glfwGetFramebufferSize(window, &width, &height);
+            glfwWaitEvents();
+        }
+
         // Wait until the device is idle before we re-do everything
         vkDeviceWaitIdle(this->device);
 
@@ -934,9 +964,9 @@ private:
 
     /* Create the image views for every image in the swapchain. */
     void create_swapchain_views(std::vector<VkImageView>* swapchain_frameviews) {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Creating imageview handles for swapchain..." << std::endl;
-        #endif
+#endif
 
         // Make sure there's enough space in the vector
         swapchain_frameviews->resize(this->swapchain_frames.size());
@@ -976,9 +1006,9 @@ private:
 
     /* Sets up the render passes for our application. */
     VkRenderPass create_render_pass() {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Creating renderpass..." << std::endl;
-        #endif
+#endif
 
         // Start by defining the VkAttachementDescription. We only have one framebuffer with one image, so we also only need one attachment
         VkAttachmentDescription color_attachment{};
@@ -991,7 +1021,7 @@ private:
         // When writing the image again, we want to store it to be read later (by the monitor, for example)
         color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         // We don't do anything with the stencil buffer, so we couldn't care less
-        color_attachment.stencilLoadOp =VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         // For textures, we have to define the layout of the image at the start and at the end. We don't care what it is when we begin...
         color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1049,19 +1079,19 @@ private:
     }
 
     /* Converts raw shader code into a VkShaderModule object. */
-    VkShaderModule create_shader(char* shader_code, size_t shader_size) {
-        #ifdef DEBUG
-        std::cout << EMPTY "Creating shader of " << shader_size << " bytes..." << std::endl;
-        #endif
+    VkShaderModule create_shader(std::vector<char> raw_shader) {
+#ifdef DEBUG
+        std::cout << EMPTY "Creating shader of " << raw_shader.size() << " bytes..." << std::endl;
+#endif
 
         // As always, start by defining the createInfo struct
         VkShaderModuleCreateInfo createInfo{};
         // Be sure to pass the struct's type
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         // Tell the struct how many bytes we have
-        createInfo.codeSize = shader_size;
+        createInfo.codeSize = raw_shader.size();
         // Since we aligned the data to uint32_t already, it's time to just reinterpret it and we're done
-        createInfo.pCode = reinterpret_cast<const uint32_t*>(shader_code);
+        createInfo.pCode = reinterpret_cast<const uint32_t*>(raw_shader.data());
 
         // Create it
         VkShaderModule result;
@@ -1074,30 +1104,25 @@ private:
 
     /* Finally, it's time to create the graphics pipeline. */
     VkPipeline create_graphics_pipeline(VkPipelineLayout* pipeline_layout) {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Creating graphics pipeline..." << std::endl;
-        #endif
+#endif
 
         /* STEP 1: First we'll treat the 'variable' stages, i.e., the shaders */
 
         // Start by reading both of our shaders
-        size_t n_vertex_shader_bytes = 0;
-        char* vertex_shader = read_shader("src/HelloTriangle/shaders/bin/vert.spv", n_vertex_shader_bytes);
-        size_t n_fragment_shader_bytes = 0;
-        char* fragment_shader = read_shader("src/HelloTriangle/shaders/bin/frag.spv", n_fragment_shader_bytes);
+        std::vector<char> vertex_shader = read_shader(".\\src\\HelloTriangle\\shaders\\bin\\vert.spv");
+        std::vector<char> fragment_shader = read_shader(".\\src\\HelloTriangle\\shaders\\bin\\frag.spv");
 
         // Wrap our shader codes in VkShaderModule objects
-        VkShaderModule vertex_module = create_shader(vertex_shader, n_vertex_shader_bytes);
-        delete[] vertex_shader;
+        VkShaderModule vertex_module = create_shader(vertex_shader);
         if (vertex_module == nullptr) {
             // Delete the raw bytes
-            delete[] fragment_shader;
 
             // Throw a tantrum
             throw std::runtime_error(ERROR "Could not create the vertex shader");
         }
-        VkShaderModule fragment_module = create_shader(fragment_shader, n_fragment_shader_bytes);
-        delete[] fragment_shader;
+        VkShaderModule fragment_module = create_shader(fragment_shader);
         if (vertex_module == nullptr) {
             // Delete the already wrapped vertex shader
             vkDestroyShaderModule(this->device, vertex_module, nullptr);
@@ -1168,9 +1193,9 @@ private:
         // ...top corner...
         viewport.y = 0.0f;
         // ...and continue to the right...
-        viewport.width = (float) this->swapchain_extent.width;
+        viewport.width = (float)this->swapchain_extent.width;
         // ...bottom of the viewport
-        viewport.height = (float) this->swapchain_extent.height;
+        viewport.height = (float)this->swapchain_extent.height;
         // Then, set the minimum depth to the standard value of 0.0
         viewport.minDepth = 0.0f;
         // And the maximum depth to the standard value of 1.0
@@ -1179,7 +1204,7 @@ private:
         // While the viewport is used to scale the the rectangle, we can use a scissor rectangle to cut it. This, too, we'll set to the size of the viewport
         VkRect2D scissor{};
         // No type either, instead we immediately set the xy
-        scissor.offset = {0, 0};
+        scissor.offset = { 0, 0 };
         // And then the size of the rectangle
         scissor.extent = this->swapchain_extent;
 
@@ -1225,7 +1250,7 @@ private:
         // Tell it not to multisample shadows?
         multisampling_info.sampleShadingEnable = VK_FALSE;
         // We'll only sample once
-        multisampling_info.rasterizationSamples =VK_SAMPLE_COUNT_1_BIT;
+        multisampling_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
         // Tell it to sample a minimum of 1 times (optional)
         multisampling_info.minSampleShading = 1.0f;
         // The mask of sampling is nothing either (optional)
@@ -1352,9 +1377,9 @@ private:
 
     /* Next up is creating the framebuffer for our app. */
     void create_framebuffers(std::vector<VkFramebuffer>* swapchain_framebuffers) {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Creating framebuffers..." << std::endl;
-        #endif
+#endif
 
         // First, we'll make sure the buffer has enough space
         swapchain_framebuffers->resize(this->swapchain_frameviews.size());
@@ -1451,7 +1476,7 @@ private:
             // Tell it which framebuffer to use
             render_pass_info.framebuffer = this->swapchain_framebuffers[i];
             // Next, we specify what area to write to (the entire area). This is purely for shaders, and note that this means that the frame will be written to & read from for each shader
-            render_pass_info.renderArea.offset = {0, 0};
+            render_pass_info.renderArea.offset = { 0, 0 };
             render_pass_info.renderArea.extent = this->swapchain_extent;
             // Now we'll specify which color to use when clearing the buffer (which we do when loading it) - it'll be fully black
             VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -1523,10 +1548,10 @@ private:
         // First, initialize the library by creating an instance
         this->instance = this->create_vulkan_instance(required_extensions);
 
-        #ifdef DEBUG
+#ifdef DEBUG
         // Once that's done, register the callback
         this->debug_messenger = this->init_vulkan_debug();
-        #endif
+#endif
 
         // Setup the surface we'll use
         this->surface = this->create_surface();
@@ -1660,12 +1685,12 @@ private:
 
 public:
     /* Width (in pixels) of the GLFW window. */
-    const size_t wwidth;
+    const int wwidth;
     /* Height (in pixels) of the GLFW window. */
-    const size_t wheight;
+    const int wheight;
 
     /* Constructor for the HelloTriangleApplication class, which takes the size of the window and which validation layers to add in case DEBUG is defined. */
-    HelloTriangleApplication(size_t width = 800, size_t height = 600, const std::vector<const char*>& device_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME }, const std::vector<const char*>& validation_layers = {"VK_LAYER_KHRONOS_validation"}) :
+    HelloTriangleApplication(int width = 800, int height = 600, const std::vector<const char*>& device_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME }, const std::vector<const char*>& validation_layers = { "VK_LAYER_KHRONOS_validation" }) :
         device_extensions(device_extensions),
         validation_layers(validation_layers),
         framebuffer_resized(false),
@@ -1679,16 +1704,16 @@ public:
         std::vector<const char*> required_extensions = this->get_extensions();
         // Next, check if the required extensions are supported
         this->check_extensions(required_extensions);
-        
+
         // Initialize vulkan with the required extensions
         this->init_vulkan(required_extensions);
     }
 
     /* Destructor for the HelloTriangleApplication. */
     ~HelloTriangleApplication() {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Cleaning up..." << std::endl;
-        #endif
+#endif
 
         // If we're done, wait until the GPU is finished before starting cleanup etc
         vkDeviceWaitIdle(this->device);
@@ -1708,13 +1733,13 @@ public:
 
         // Be sure to destroy the logical device
         vkDestroyDevice(this->device, nullptr);
-        
+
         // Destroy the Vulkan surface
         vkDestroySurfaceKHR(this->instance, this->surface, nullptr);
-        #ifdef DEBUG
+#ifdef DEBUG
         // First clean up the messenger
         DestroyDebugUtilsMessengerEXT(this->instance, this->debug_messenger, nullptr);
-        #endif
+#endif
         // Destroy the Vulkan instance
         vkDestroyInstance(this->instance, nullptr);
 
@@ -1727,9 +1752,9 @@ public:
 
     /* Main loop for the program. */
     void run() {
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Entering main loop." << std::endl;
-        #endif
+#endif
 
         // Keep running until the window closed somehow
         size_t current_frame = 0;
@@ -1744,9 +1769,9 @@ public:
         // If we're done, wait until the GPU is finished before starting cleanup etc
         vkDeviceWaitIdle(this->device);
 
-        #ifdef DEBUG
+#ifdef DEBUG
         std::cout << INFO "Exiting main loop." << std::endl;
-        #endif
+#endif
     }
 
 };
@@ -1754,10 +1779,12 @@ public:
 
 /* Entry point to the application. */
 int main() {
+    std::cout << "Hello, world!" << std::endl;
     try {
         HelloTriangleApplication app;
         app.run();
-    } catch(const std::exception& e) {
+    }
+    catch (const std::exception& e) {
         std::cout << e.what() << std::endl;
         return EXIT_FAILURE;
     }

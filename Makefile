@@ -1,9 +1,13 @@
 ##### CONSTANTS #####
 
 # Compilers
-GXX=g++
-GXX_ARGS=-std=c++17 -O2 -Wall -Wextra
-GXX_LINK=-lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
+# GXX=g++
+# GXX_ARGS=-std=c++17 -O2 -Wall -Wextra
+# GXX_LINK=-lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
+CC=cl
+LINKER=link
+CC_ARGS=-std=c++17 -O2 -Wall -Wextra
+LINKER_ARGS=-lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 # Folders
 SRC	=src

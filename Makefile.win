@@ -1,0 +1,83 @@
+##### CONSTANTS #####
+
+colon := :
+
+# Compilers
+CC=cl
+LINKER=link
+CC_ARGS=-std:c++17 -O2 -W3 -EHcs -I"%VULKAN_SDK%/Include" -I"C:/Users/Tim/glfw/include" -I"C:/Users/Tim/glm"
+LINKER_ARGS=/LIBPATH:"C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.26.28801/lib/x64" /LIBPATH:"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/um/x64" /LIBPATH:"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/ucrt/x64" /LIBPATH:"%VULKAN_SDK%/Lib"  /LIBPATH:"C:/Users/Tim/glfw/lib-vc2019" vulkan-1.lib glfw3dll.lib
+
+# Folders
+SRC	=src
+LIB	=$(SRC)\lib
+BIN	=bin
+OBJ	=$(BIN)\obj
+TEST=tests\
+VULKANTEST=$(SRC)/VulkanTest
+
+HELLOTRIANGLE=$(SRC)\HelloTriangle
+HELLOTRIANGLE_SHADERS=$(HELLOTRIANGLE)\shaders
+HELLOTRIANGLE_SHADERS_BIN=$(HELLOTRIANGLE_SHADERS)\bin
+
+
+
+##### INPUT #####
+ifdef DEBUG
+CC_ARGS += -DEBUG -DDEBUG
+endif
+
+
+
+##### PHONY RULES #####
+.PHONY: default vulkantest hellotriangle all dirs clean
+default: all
+
+all: vulkantest hellotriangle
+
+clean:
+	-del /s $(OBJ)\*.obj 
+	-del /s $(BIN)\*.exe 
+	-del $(HELLOTRIANGLE_SHADERS_BIN)\*.spv
+
+
+
+##### DIRECTORY RULES #####
+
+$(BIN):
+	mkdir -p $@
+$(OBJ):
+	mkdir -p $@
+$(OBJ)/VulkanTest:
+	mkdir -p $@
+$(OBJ)/HelloTriangle:
+	mkdir -p $@
+$(HELLOTRIANGLE_SHADERS_BIN):
+	mkdir -p $@
+dirs: $(BIN) $(OBJ) $(OBJ)/VulkanTest $(OBJ)/HelloTriangle $(HELLOTRIANGLE_SHADERS_BIN)
+
+
+
+##### COMPILE RULES #####
+
+# Compile rule for the main.cpp, which skips object rules for now
+$(OBJ)/VulkanTest/main.obj: $(VULKANTEST)/main.cpp dirs
+	$(CC) $(CC_ARGS) -Fo"$@" -c $<
+$(BIN)/vulkantest.exe: $(OBJ)/VulkanTest/main.obj dirs
+	$(LINKER) -OUT$(colon)"$@" $< $(LINKER_ARGS)
+vulkantest: $(BIN)/vulkantest.exe
+
+# General compile rule for all shaders in the HelloTriangle subproject
+$(HELLOTRIANGLE_SHADERS_BIN)/%.spv: $(HELLOTRIANGLE_SHADERS)/shader.% | dirs
+	glslc -o $@ $<
+
+# Compile rule for the main.cpp of the Hello Triangle tutorial, which skips object rules for now
+$(OBJ)/HelloTriangle/main.obj: $(HELLOTRIANGLE)/main.cpp dirs
+	$(CC) $(CC_ARGS) -Fo"$@" -c $<
+$(BIN)/hellotriangle.exe: $(OBJ)/HelloTriangle/main.obj $(HELLOTRIANGLE_SHADERS_BIN)/vert.spv $(HELLOTRIANGLE_SHADERS_BIN)/frag.spv dirs
+	$(LINKER) -OUT$(colon)"$@" $< $(LINKER_ARGS)
+hellotriangle: $(BIN)/hellotriangle.exe
+
+# $(BIN)/hellotriangle.exe: $(HELLOTRIANGLE)/main.cpp $(HELLOTRIANGLE_SHADERS_BIN)/vert.spv $(HELLOTRIANGLE_SHADERS_BIN)/frag.spv | dirs
+# 	$(GXX) $(GXX_ARGS) -o $@ $< $(GXX_LINK)
+# hellotriangle: $(BIN)/hellotriangle.exe
