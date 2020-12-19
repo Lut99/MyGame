@@ -20,6 +20,15 @@ HELLOTRIANGLE=$(SRC)\HelloTriangle
 HELLOTRIANGLE_SHADERS=$(HELLOTRIANGLE)\shaders
 HELLOTRIANGLE_SHADERS_BIN=$(HELLOTRIANGLE_SHADERS)\bin
 
+HELLOVIKINGROOM=$(SRC)\HelloVikingRoom
+HELLOVIKINGROOM_LIB=$(HELLOVIKINGROOM)\lib
+HELLOVIKINGROOM_SHADERS=$(HELLOVIKINGROOM_LIB)\shaders
+HELLOVIKINGROOM_SHADERS_BIN=$(HELLOVIKINGROOM_SHADERS)\bin
+HELLOVIKINGROOM_DIRS=debug
+HELLOVIKINGROOM_OBJS=$(HELLOVIKINGROOM_DIRS:%=$(OBJ)\HelloVikingRoom\\%)
+HELLOVIKINGROOM_INCLUDE=$(HELLOVIKINGROOM_DIRS:%=-I$(HELLOVIKINGROOM_LIB)\\%)
+HELLOVIKINGROOM_DEPENDENCIES=$(OBJ)\HelloVikingRoom\debug\Debug.obj
+
 
 
 ##### INPUT #####
@@ -30,40 +39,47 @@ endif
 
 
 ##### PHONY RULES #####
-.PHONY: default vulkantest hellotriangle all dirs clean
+.PHONY: default vulkantest hellotriangle hellovikingroom all dirs clean
 default: all
 
-all: vulkantest hellotriangle
+all: vulkantest hellotriangle hellovikingroom
 
 clean:
 	-del /s $(OBJ)\*.obj 
 	-del /s $(BIN)\*.exe 
 	-del $(HELLOTRIANGLE_SHADERS_BIN)\*.spv
+	-del $(HELLOVIKINGROOM_SHADERS_BIN)\*.spv
 
 
 
 ##### DIRECTORY RULES #####
 
 $(BIN):
-	mkdir -p $@
+	md $@
 $(OBJ):
-	mkdir -p $@
-$(OBJ)/VulkanTest:
-	mkdir -p $@
-$(OBJ)/HelloTriangle:
-	mkdir -p $@
+	md $@
+$(OBJ)\VulkanTest:
+	md $@
+$(OBJ)\HelloTriangle:
+	md $@
+$(OBJ)\HelloVikingRoom:
+	md $@
+$(OBJ)\HelloVikingRoom\debug:
+	md $@
 $(HELLOTRIANGLE_SHADERS_BIN):
-	mkdir -p $@
-dirs: $(BIN) $(OBJ) $(OBJ)/VulkanTest $(OBJ)/HelloTriangle $(HELLOTRIANGLE_SHADERS_BIN)
+	md $@
+$(HELLOVIKINGROOM_SHADERS_BIN):
+	md $@
+dirs: $(BIN) $(OBJ) $(OBJ)\VulkanTest $(OBJ)\HelloTriangle $(OBJ)\HelloVikingRoom $(HELLOVIKINGROOM_OBJS) $(HELLOTRIANGLE_SHADERS_BIN) $(HELLOVIKINGROOM_SHADERS_BIN)
 
 
 
 ##### COMPILE RULES #####
 
 # Compile rule for the main.cpp, which skips object rules for now
-$(OBJ)/VulkanTest/main.obj: $(VULKANTEST)/main.cpp dirs
+$(OBJ)/VulkanTest/main.obj: $(VULKANTEST)/main.cpp | dirs
 	$(CC) $(CC_ARGS) -Fo"$@" -c $<
-$(BIN)/vulkantest.exe: $(OBJ)/VulkanTest/main.obj dirs
+$(BIN)/vulkantest.exe: $(OBJ)/VulkanTest/main.obj | dirs
 	$(LINKER) -OUT$(colon)"$@" $< $(LINKER_ARGS)
 vulkantest: $(BIN)/vulkantest.exe
 
@@ -74,10 +90,21 @@ $(HELLOTRIANGLE_SHADERS_BIN)/%.spv: $(HELLOTRIANGLE_SHADERS)/shader.% | dirs
 # Compile rule for the main.cpp of the Hello Triangle tutorial, which skips object rules for now
 $(OBJ)/HelloTriangle/main.obj: $(HELLOTRIANGLE)/main.cpp dirs
 	$(CC) $(CC_ARGS) -Fo"$@" -c $<
-$(BIN)/hellotriangle.exe: $(OBJ)/HelloTriangle/main.obj $(HELLOTRIANGLE_SHADERS_BIN)/vert.spv $(HELLOTRIANGLE_SHADERS_BIN)/frag.spv dirs
+$(BIN)/hellotriangle.exe: $(OBJ)/HelloTriangle/main.obj $(HELLOTRIANGLE_SHADERS_BIN)/vert.spv $(HELLOTRIANGLE_SHADERS_BIN)/frag.spv | dirs
 	$(LINKER) -OUT$(colon)"$@" $< $(LINKER_ARGS)
 hellotriangle: $(BIN)/hellotriangle.exe
 
-# $(BIN)/hellotriangle.exe: $(HELLOTRIANGLE)/main.cpp $(HELLOTRIANGLE_SHADERS_BIN)/vert.spv $(HELLOTRIANGLE_SHADERS_BIN)/frag.spv | dirs
-# 	$(GXX) $(GXX_ARGS) -o $@ $< $(GXX_LINK)
-# hellotriangle: $(BIN)/hellotriangle.exe
+# General compile rule for all shaders in the HelloVikingRoom subproject
+$(HELLOVIKINGROOM_SHADERS_BIN)\\%.spv: $(HELLOVIKINGROOM_SHADERS)\shader.% | dirs
+	glslc -o $@ $<
+
+# General compile rule for all library functions
+$(OBJ)\HelloVikingRoom\\%.obj: $(HELLOVIKINGROOM_LIB)\\%.cpp | dirs
+	$(CC) $(CC_ARGS) $(HELLOVIKINGROOM_INCLUDE) -Fo"$@" -c $<
+
+# Compile rule for the main.cpp of the Hello Triangle tutorial, which skips object rules for now
+$(OBJ)\HelloVikingRoom\main.obj: $(HELLOVIKINGROOM)\main.cpp | dirs
+	$(CC) $(CC_ARGS) $(HELLOVIKINGROOM_INCLUDE) -Fo"$@" -c $<
+$(BIN)\hellovikingroom.exe: $(OBJ)\HelloVikingRoom\main.obj $(HELLOVIKINGROOM_DEPENDENCIES) | $(HELLOVIKINGROOM_SHADERS_BIN)\vert.spv $(HELLOVIKINGROOM_SHADERS_BIN)\frag.spv dirs
+	$(LINKER) -OUT$(colon)"$@" $^ $(LINKER_ARGS)
+hellovikingroom: $(BIN)\hellovikingroom.exe
