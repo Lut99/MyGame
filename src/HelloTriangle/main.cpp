@@ -1779,7 +1779,6 @@ public:
 
 /* Entry point to the application. */
 int main() {
-    std::cout << "Hello, world!" << std::endl;
     try {
         HelloTriangleApplication app;
         app.run();
