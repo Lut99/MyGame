@@ -15,6 +15,7 @@
 #define GLFW_DLL
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -26,6 +27,7 @@
 #include <cerrno>
 #include <stdexcept>
 #include <vector>
+#include <array>
 #include <unordered_map>
 
 
@@ -43,6 +45,8 @@
 #define ERROR "[\033[31;1m ERRR \033[0m] "
 /* Prefix for each other message. */
 #define EMPTY "         "
+/* Additional prefix for indented messages. */
+#define INDENT "   "
 
 
 
@@ -195,6 +199,58 @@ struct SwapChainSupport {
     {}
 };
 
+/* Struct to describe a vertex with. */
+struct Vertex {
+    /* Describes the position (in 2D) of our vertex. */
+    glm::vec2 pos;
+    /* Describes the color (as RGB) of our vertex. */
+    glm::vec3 color;
+
+    /* Constructor for the Vertex class, which takes a position / color pair. */
+    Vertex(const glm::vec2& pos, const glm::vec3& color) :
+        pos(pos),
+        color(color)
+    {}
+
+    /* Returns the binding descriptor, i.e., how we'll read memory. */
+    static VkVertexInputBindingDescription getBindingDescription() {
+        VkVertexInputBindingDescription binding_description{};
+        // Tell it we'll only use the first (and only) binding we have
+        binding_description.binding = 0;
+        // Tell it that each vertex is the size of our Vertex struct
+        binding_description.stride = sizeof(Vertex);
+        // Tell it to use vertex-rendering instead of instance rendering (whatever that may be)
+        binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return binding_description;
+    }
+    /* Returns an attribute descriptor, which tells Vulkan what to do with each chunk read specified by the binding. */
+    static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions() {
+        std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions;
+        
+        // We have two structs, one per input layer
+        // First struct: we pass the position to the shader, so we take the first binding, the first location, tell it it are two 32 byte floats and tell it where we can find it in the struct
+        attribute_descriptions[0].binding = 0;
+        attribute_descriptions[0].location = 0;
+        attribute_descriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attribute_descriptions[0].offset = offsetof(Vertex, pos);
+        // Second struct: we pass the color to the shader, so we take the first binding, the second location, tell it it are three 32 byte floats and tell it where we can find it in the struct
+        attribute_descriptions[1].binding = 0;
+        attribute_descriptions[1].location = 1;
+        attribute_descriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attribute_descriptions[1].offset = offsetof(Vertex, color);
+
+        // Done, return the structs
+        return attribute_descriptions;
+    }
+};
+/* Defines the value of the vertices we'll work on! */
+const std::vector<Vertex> vertices = {
+    Vertex(glm::vec2(0.0f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f)),
+    Vertex(glm::vec2(0.5f, 0.5f), glm::vec3(0.0f, 1.0f, 0.0f)),
+    Vertex(glm::vec2(-0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f))
+};
+
 
 
 
@@ -265,6 +321,11 @@ private:
     std::vector<VkFence> in_flight_fences;
     /* These fences will be used to keep track of if we're using a specific VkImage or not. */
     std::vector<VkFence> images_in_flight;
+
+    /* Buffer to pass the vertices from the CPU to the GPU. */
+    VkBuffer vertex_buffer;
+    /* A bit of memory on the device where we'll allocate our vertex buffer. */
+    VkDeviceMemory vertex_buffer_memory;
 
 
     /* Callback for the window resize. */
@@ -1164,18 +1225,20 @@ private:
 
         /* STEP 2: Now we'll treat the fixed stages. */
 
-        // First, we'll define the vertex input for our pipeline. Since we don't have any (yet), we tell so to the pipeline
+        // First, we'll define the vertex input for our pipeline. We pass it a single of our vertices
+        VkVertexInputBindingDescription binding_description = Vertex::getBindingDescription();
+        std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = Vertex::getAttributeDescriptions();
         VkPipelineVertexInputStateCreateInfo vertex_input_info{};
         // As always, set the struct's type
         vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        // Tell it that we don't have any description for the input data
-        vertex_input_info.vertexBindingDescriptionCount = 0;
-        // Optionally tell it again by providing a nullptr
-        vertex_input_info.pVertexBindingDescriptions = nullptr;
-        // Tell it that we don't have any attributes for the input data
-        vertex_input_info.vertexAttributeDescriptionCount = 0;
-        // Optionally tell it again by providing a nullptr
-        vertex_input_info.pVertexAttributeDescriptions = nullptr;
+        // Tell it that we  have 1 description for the input data
+        vertex_input_info.vertexBindingDescriptionCount = 1;
+        // Tell it again by providing the data
+        vertex_input_info.pVertexBindingDescriptions = &binding_description;
+        // Tell it that we have 2 attributes for the input data
+        vertex_input_info.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_descriptions.size());
+        // Tell it again by providing the data
+        vertex_input_info.pVertexAttributeDescriptions = attribute_descriptions.data();
 
         // Next, we'll tell the pipeline what to do with the vertices we give it. We'll be using meshes, so we'll tell it to draw triangles between every set of three points given
         VkPipelineInputAssemblyStateCreateInfo input_assembly_info{};
@@ -1433,8 +1496,178 @@ private:
         return result;
     }
 
+    /* Used to find the best memory type for the given device & buffer. */
+    uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties) {
+        // Get the available memory in the internal device
+        VkPhysicalDeviceMemoryProperties memory_properties;
+        vkGetPhysicalDeviceMemoryProperties(this->gpu, &memory_properties);
+
+        // Try to find suitable memory (i.e., check if the device has enough memory bits(?) and if the required properties match)
+        for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++) {
+            if (type_filter & (1 << i) && (memory_properties.memoryTypes[i].propertyFlags & properties) == properties) {
+                return i;
+            }
+        }
+
+        // Didn't find any
+        throw std::runtime_error(ERROR "Could not find suitable buffer memory on device.");
+    }
+
+    /* Creates a buffer, any buffer. */
+    VkBuffer create_buffer(VkDeviceMemory* buffer_memory, VkDeviceSize buffer_size, VkBufferUsageFlags buffer_usage, VkMemoryPropertyFlags buffer_properties) {
+#ifdef DEBUG
+        std::cout << EMPTY INDENT "Creating buffer..." << std::endl;
+#endif
+
+        // As always, time to fill in the required struct
+        VkBufferCreateInfo createInfo{};
+        createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        // Tell it the size of the buffer; in our case, of three vertices
+        createInfo.size = buffer_size;
+        // Tell it we use the buffer as a vertex
+        createInfo.usage = buffer_usage;
+        // Tell it just one command queue can use the buffer at a time
+        createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        // We won't use flags for now
+        createInfo.flags = 0;
+
+        // Time to create said buffer
+        VkBuffer result;
+        if (vkCreateBuffer(this->device, &createInfo, nullptr, &result) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not create buffer.");
+        }
+
+#ifdef DEBUG
+        std::cout << EMPTY INDENT "Allocating buffer..." << std::endl;
+#endif
+
+        // Next, allocate space for the buffer; we'll first check its memory requirements
+        VkMemoryRequirements memory_requirements;
+        vkGetBufferMemoryRequirements(this->device, result, &memory_requirements);
+
+        // Next, we prepare the struct describing the allocation
+        VkMemoryAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        // Tell it how many bytes we should allocate
+        alloc_info.allocationSize = memory_requirements.size;
+        // Tell it what memory type to allocate, that will be of the required type and be accessible (and coherent, so not cached) from the host side
+        alloc_info.memoryTypeIndex = this->find_memory_type(memory_requirements.memoryTypeBits, buffer_properties);
+
+        // Do the actual allocation
+        if (vkAllocateMemory(this->device, &alloc_info, nullptr, buffer_memory) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not allocate memory for buffer.");
+        }
+        // Associate the allocated region with out buffer. We have an offset of zero, since this memory region is for this vertex buffer alone.
+        if (vkBindBufferMemory(this->device, result, *buffer_memory, 0) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not bind allocated memory to buffer.");
+        }
+
+        // Actually return the result
+        return result;
+    }
+
+    /* Copies one buffer (the source) to another (the destination), copying n bytes. */
+    void copy_buffer(VkBuffer* dst, VkBuffer* src, VkDeviceSize N) {
+#ifdef DEBUG
+        std::cout << EMPTY INDENT "Performing GPU copy..." << std::endl;
+#endif
+
+        // Be ready to schedule a command to copy the buffer
+        VkCommandBufferAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        alloc_info.commandPool = this->command_pool;
+        alloc_info.commandBufferCount = 1;
+
+        VkCommandBuffer command_buffer;
+        if (vkAllocateCommandBuffers(this->device, &alloc_info, &command_buffer) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not allocate temporary copy command buffer.");
+        }
+
+        // Start recording this command buffer right away
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        // Tell it we'll only be needin' the buffer once
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not begin recording in temporary command buffer.");
+        }
+
+        // Start the copy
+        VkBufferCopy copy_region{};
+        copy_region.srcOffset = 0;
+        copy_region.dstOffset = 0;
+        copy_region.size = N;
+        vkCmdCopyBuffer(command_buffer, *src, *dst, 1, &copy_region);
+
+        // Since that's all we wanna do, we're done here
+        vkEndCommandBuffer(command_buffer);
+
+        // Next, we'll submit the command buffer to the graphics queue so it can copy
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffer;
+
+        // Submit the command buffer, and then wait until the copying is done
+        if (vkQueueSubmit(this->graphics_queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Could not submit temporary command buffer to graphics queue.");
+        }
+        if (vkQueueWaitIdle(this->graphics_queue) != VK_SUCCESS) {
+            throw std::runtime_error(ERROR "Something went wrong while waiting for graphics queue to finish copying.");
+        }
+
+        // Now we're done, free the command buffer since we won't need it anymore
+        vkFreeCommandBuffers(this->device, this->command_pool, 1, &command_buffer);
+    }
+
+    /* Creates the required vertex buffer. */
+    VkBuffer create_vertex_buffer(VkDeviceMemory* vertex_buffer_memory) {
+#ifdef DEBUG
+        std::cout << INFO "Creating staging buffer for copying vertex data..." << std::endl;
+#endif
+
+        // Use our neat lil' helper function to create the shared, staging buffer first (hence the 'can be used as transfer source'-bit)
+        VkDeviceSize buffer_size = sizeof(Vertex) * vertices.size();
+        VkDeviceMemory staging_buffer_memory;
+        VkBuffer staging_buffer = this->create_buffer(&staging_buffer_memory, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+#ifdef DEBUG
+        std::cout << EMPTY "Populating staging buffer..." << std::endl;
+#endif
+
+        // Copy the global vertex buffer to the staging buffer
+        void* data;
+        // Bind the GPU-side buffer to a CPU-side RAM-located memory area (we map from the start to the elements of the buffer, without any flags, and put the pointer in data)
+        vkMapMemory(this->device, staging_buffer_memory, 0, buffer_size, 0, &data);
+        // Copy our vector to the mapped area
+        memcpy(data, vertices.data(), (size_t) buffer_size);
+        // Release the memory again
+        vkUnmapMemory(this->device, staging_buffer_memory);
+
+#ifdef DEBUG
+        std::cout << INFO "Creating vertex buffer..." << std::endl;
+#endif
+
+        // With the GPU aware of the data in the staging buffer, time to move it to a GPU-local buffer
+        VkBuffer result = this->create_buffer(vertex_buffer_memory, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        // Use a helper copy buffer function to perform the transfer
+        this->copy_buffer(&result, &staging_buffer, buffer_size);
+
+        // Once done, cleanup the extra staging buffer
+        vkDestroyBuffer(this->device, staging_buffer, nullptr);
+        vkFreeMemory(this->device, staging_buffer_memory, nullptr);
+
+        return result;
+    }
+
     /* Next up, we'll create the command buffers - one per framebuffer, describing what to do. */
     void create_command_buffers(std::vector<VkCommandBuffer>* command_buffers) {
+#ifdef DEBUG
+        std::cout << INFO "Creating command buffers..." << std::endl;
+#endif
+
         // Make sure it's sized correctly
         command_buffers->resize(this->swapchain_framebuffers.size());
 
@@ -1489,14 +1722,20 @@ private:
             // Next up, we can bind the graphics pipeline to this render pass (which is a graphics pipeline)
             vkCmdBindPipeline((*command_buffers)[i], VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphics_pipeline);
 
+            // Bind our vertex buffer to the draw phase, so the GPU knows it exists
+            VkBuffer vertex_buffers[] = { this->vertex_buffer };
+            VkDeviceSize offsets[] = { 0 };
+            // Note that the command can be used to bind more buffers at once, but we won't do that
+            vkCmdBindVertexBuffers((*command_buffers)[i], 0, 1, vertex_buffers, offsets);
+
             // We have told it how to start and how to render - all we have to tell it is what to render
             // Here, we pass the following information:
             //   - The command buffer that should start drawing
-            //   - We technically have three vertices to draw (even though we don't pass them explicitly)
+            //   - How many vertices we'll draw (the size of the global buffer, of course)
             //   - We don't do instance rendering (whatever that may be), so we pass 1
             //   - The first index in the vertex buffer, i.e., the lowest value of gl_VertexIndex in the shaders
             //   - The first index of the instance buffer, i.e., the lowest value of gl_InstanceIndex in the shaders (not used)
-            vkCmdDraw((*command_buffers)[i], 3, 1, 0, 0);
+            vkCmdDraw((*command_buffers)[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 
             // Once it has been drawn, we can end the render pass
             vkCmdEndRenderPass((*command_buffers)[i]);
@@ -1578,6 +1817,9 @@ private:
 
         // Create the command pool
         this->command_pool = this->create_command_pool();
+
+        // Create the vertex buffers
+        this->vertex_buffer = this->create_vertex_buffer(&this->vertex_buffer_memory);
 
         // Record the command buffers
         this->create_command_buffers(&this->command_buffers);
@@ -1724,6 +1966,10 @@ public:
             vkDestroySemaphore(this->device, this->image_rendered_semaphores[i], nullptr);
             vkDestroyFence(this->device, this->in_flight_fences[i], nullptr);
         }
+
+        // Don't forget to destroy the buffer & its associated memory!
+        vkDestroyBuffer(this->device, this->vertex_buffer, nullptr);
+        vkFreeMemory(this->device, this->vertex_buffer_memory, nullptr);
 
         // Don't forget to destroy the command pool!
         vkDestroyCommandPool(this->device, this->command_pool, nullptr);
