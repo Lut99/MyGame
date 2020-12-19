@@ -244,11 +244,16 @@ struct Vertex {
         return attribute_descriptions;
     }
 };
-/* Defines the value of the vertices we'll work on! */
+/* Defines the value of the vertices we'll work on -> Currently it's a triangle, so we can try out an index buffer */
 const std::vector<Vertex> vertices = {
-    Vertex(glm::vec2(0.0f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f)),
-    Vertex(glm::vec2(0.5f, 0.5f), glm::vec3(0.0f, 1.0f, 0.0f)),
-    Vertex(glm::vec2(-0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f))
+    Vertex(glm::vec2(-0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f)),
+    Vertex(glm::vec2(0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f)),
+    Vertex(glm::vec2(0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f)),
+    Vertex(glm::vec2(-0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f))
+};
+/* Index buffer for the vertices. */
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0
 };
 
 
@@ -326,6 +331,10 @@ private:
     VkBuffer vertex_buffer;
     /* A bit of memory on the device where we'll allocate our vertex buffer. */
     VkDeviceMemory vertex_buffer_memory;
+    /* Buffer to pass the vertex indices from the CPU to the GPU. */
+    VkBuffer index_buffer;
+    /* A bit of memory on the device where we'll allocate our vertex index buffer. */
+    VkDeviceMemory index_buffer_memory;
 
 
     /* Callback for the window resize. */
@@ -1662,6 +1671,49 @@ private:
         return result;
     }
 
+    /* Creates the index buffer on the GPU. */
+    VkBuffer create_index_buffer(VkDeviceMemory* index_buffer_memory) {
+#ifdef DEBUG
+        std::cout << INFO "Creating staging buffer for copying index data..." << std::endl;
+#endif
+
+        // Use our neat lil' helper function to create the shared, staging buffer first (hence the 'can be used as transfer source'-bit)
+        VkDeviceSize buffer_size = sizeof(uint16_t) * indices.size();
+        VkDeviceMemory staging_buffer_memory;
+        VkBuffer staging_buffer = this->create_buffer(&staging_buffer_memory, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+#ifdef DEBUG
+        std::cout << EMPTY "Populating staging buffer..." << std::endl;
+#endif
+
+        // Copy the global vertex buffer to the staging buffer
+        void* data;
+        // Bind the GPU-side buffer to a CPU-side RAM-located memory area (we map from the start to the elements of the buffer, without any flags, and put the pointer in data)
+        vkMapMemory(this->device, staging_buffer_memory, 0, buffer_size, 0, &data);
+        // Copy our vector to the mapped area
+        memcpy(data, indices.data(), (size_t) buffer_size);
+        // Release the memory again
+        vkUnmapMemory(this->device, staging_buffer_memory);
+
+#ifdef DEBUG
+        std::cout << INFO "Creating index buffer..." << std::endl;
+#endif
+
+        // With the GPU aware of the data in the staging buffer, time to move it to a GPU-local buffer
+        VkBuffer result = this->create_buffer(index_buffer_memory, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        // Use a helper copy buffer function to perform the transfer
+        this->copy_buffer(&result, &staging_buffer, buffer_size);
+
+        // Once done, cleanup the extra staging buffer
+        vkDestroyBuffer(this->device, staging_buffer, nullptr);
+        vkFreeMemory(this->device, staging_buffer_memory, nullptr);
+
+        return result;
+    }
+
+
+
     /* Next up, we'll create the command buffers - one per framebuffer, describing what to do. */
     void create_command_buffers(std::vector<VkCommandBuffer>* command_buffers) {
 #ifdef DEBUG
@@ -1727,6 +1779,8 @@ private:
             VkDeviceSize offsets[] = { 0 };
             // Note that the command can be used to bind more buffers at once, but we won't do that
             vkCmdBindVertexBuffers((*command_buffers)[i], 0, 1, vertex_buffers, offsets);
+            // Also bind the index buffer
+            vkCmdBindIndexBuffer((*command_buffers)[i], this->index_buffer, 0, VK_INDEX_TYPE_UINT16);
 
             // We have told it how to start and how to render - all we have to tell it is what to render
             // Here, we pass the following information:
@@ -1735,7 +1789,7 @@ private:
             //   - We don't do instance rendering (whatever that may be), so we pass 1
             //   - The first index in the vertex buffer, i.e., the lowest value of gl_VertexIndex in the shaders
             //   - The first index of the instance buffer, i.e., the lowest value of gl_InstanceIndex in the shaders (not used)
-            vkCmdDraw((*command_buffers)[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+            vkCmdDrawIndexed((*command_buffers)[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
             // Once it has been drawn, we can end the render pass
             vkCmdEndRenderPass((*command_buffers)[i]);
@@ -1818,8 +1872,9 @@ private:
         // Create the command pool
         this->command_pool = this->create_command_pool();
 
-        // Create the vertex buffers
+        // Create the vertex buffers & its index buffer
         this->vertex_buffer = this->create_vertex_buffer(&this->vertex_buffer_memory);
+        this->index_buffer = this->create_index_buffer(&this->index_buffer_memory);
 
         // Record the command buffers
         this->create_command_buffers(&this->command_buffers);
@@ -1966,6 +2021,10 @@ public:
             vkDestroySemaphore(this->device, this->image_rendered_semaphores[i], nullptr);
             vkDestroyFence(this->device, this->in_flight_fences[i], nullptr);
         }
+
+        // Don't forget to destroy the buffer & its associated memory!
+        vkDestroyBuffer(this->device, this->index_buffer, nullptr);
+        vkFreeMemory(this->device, this->index_buffer_memory, nullptr);
 
         // Don't forget to destroy the buffer & its associated memory!
         vkDestroyBuffer(this->device, this->vertex_buffer, nullptr);
