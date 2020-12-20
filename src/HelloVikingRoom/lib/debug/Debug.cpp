@@ -20,6 +20,7 @@
 #include <chrono>
 #include <ctime>
 #include <sstream>
+#include <stdexcept>
 
 #include "Debug.hpp"
 
@@ -34,63 +35,74 @@ Debugger::Debugger() {}
 
 /* Actually prints the message to the given output stream. */
 void Debugger::_log(std::ostream& os, Severity severity, const std::string& message, size_t extra_indent) {
-    // Fetch the individual timestamp values as strings of the right size
-    if (severity != Severity::auxillary) {
-        std::time_t cnow = std::time(0);
-        std::tm* now = std::localtime(&cnow);
-        std::string hours = std::to_string(now->tm_hour);
-        if (hours.size() < 2) { hours = '0' + hours; }
-        std::string minutes = std::to_string(now->tm_min);
-        if (minutes.size() < 2) { minutes = '0' + minutes; }
-        std::string seconds = std::to_string(now->tm_sec);
-        if (seconds.size() < 2) { seconds = '0' + seconds; }
-        std::string milliseconds = std::to_string((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()) % 1000).count());
-        while (milliseconds.size() < 3) { milliseconds = '0' + milliseconds; }
+    // // Fetch the individual timestamp values as strings of the right size
+    // if (severity != Severity::auxillary) {
+    //     std::time_t cnow = std::time(0);
+    //     std::tm* now = std::localtime(&cnow);
+    //     std::string hours = std::to_string(now->tm_hour);
+    //     if (hours.size() < 2) { hours = '0' + hours; }
+    //     std::string minutes = std::to_string(now->tm_min);
+    //     if (minutes.size() < 2) { minutes = '0' + minutes; }
+    //     std::string seconds = std::to_string(now->tm_sec);
+    //     if (seconds.size() < 2) { seconds = '0' + seconds; }
+    //     std::string milliseconds = std::to_string((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()) % 1000).count());
+    //     while (milliseconds.size() < 3) { milliseconds = '0' + milliseconds; }
 
-        // Already write to the output stream
-        os << '[' << hours << ':' << minutes << ':' << seconds << '.' << milliseconds << "] ";
-    } else {
-        os << "               ";
-    }
+    //     // Already write to the output stream
+    //     os << '[' << hours << ':' << minutes << ':' << seconds << '.' << milliseconds << "] ";
+    // } else {
+    //     os << "               ";
+    // }
 
     // Determine the type of message to preprend to signify how it went
     std::string indicator;
     switch(severity) {
         case Severity::auxillary:
-            indicator = auxillary_msg;
+            os << auxillary_msg;
             break;
 
         case Severity::info:
-            indicator = info_msg;
+            os << info_msg;
             break;
 
         case Severity::warning:
-            indicator = warning_msg;
+            os << warning_msg;
             break;
 
         case Severity::nonfatal:
+            os << nonfatal_msg;
+            break;
+
         case Severity::fatal:
-            indicator = error_msg;
+            os << fatal_msg;
             break;
 
         default:
-            indicator = "[\033[31;1m????\033[0m] ";
+            os << "[" RED "????" TEXT "] ";
     }
 
-    // Write to the target stream
-    os << indicator;
+    // Add indents
+    os << std::string(this->indent_level * 3, ' ');
+
+    // Write the message to the target stream, linewrapped
     size_t x = 0;
-    size_t width = max_line_width - 25;
+    size_t width = max_line_width - 7 - this->indent_level * 3;
     for (size_t i = 0; i < message.size(); i++) {
         if (++x >= width) {
             // Write a newline
-            os << std::endl << "                         ";
+            os << std::endl << std::string(7 + this->indent_level * 3, ' ');
+            x = 0;
         }
         os << message[i];
     }
 
-    // Done
-    os << std::endl;
+    // Done, always reset the colours
+    os << TEXT << std::endl;
+
+    // If fatal, throw the error
+    if (severity == Severity::fatal) {
+        throw std::runtime_error(message);
+    }
 }
 
 

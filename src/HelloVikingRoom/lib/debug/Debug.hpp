@@ -23,6 +23,18 @@
 #include <string>
 #include <vector>
 
+/***** COLOUR CONSTANTS *****/
+/* Foreground colours */
+#define RED "\033[31;1m"
+#define YELLOW "\033[33m"
+#define GREEN "\033[32;1m"
+/* Background colours */
+#define BRED "\033[41;1m"
+#define BYELLOW "\033[43m"
+#define BGREEN "\033[42;1m"
+/* Reset colour */
+#define TEXT "\033[0m"
+
 #ifdef DEBUG
 /***** MACROS WHEN DEBUGGING IS ENABLED *****/
 
@@ -38,6 +50,10 @@
 #define DEBUG_RETURN_VOID \
     Debug::debugger.pop(); \
     return;
+
+
+
+/* Increases the indent in the debug levels. */
 
 #else
 /***** MACROS WHEN DEBUGGING IS DISABLED *****/
@@ -61,11 +77,13 @@ namespace Debug {
     /* The string that will be appended before all auxillary messages. */
     static const std::string auxillary_msg = "       ";
     /* The string that will be appended before all info messages. */
-    static const std::string info_msg = "[\033[32;1m OK \033[0m] ";
+    static const std::string info_msg = "[" GREEN " OK " TEXT "] ";
     /* The string that will be appended before all warning messages. */
-    static const std::string warning_msg = "[\033[33;1mWARN\033[0m] ";
+    static const std::string warning_msg = "[" YELLOW "WARN" TEXT "] ";
     /* The string that will be appended before all error messages. */
-    static const std::string error_msg = "[\033[31;1mFAIL\033[0m] ";
+    static const std::string nonfatal_msg = "[" RED "FAIL" TEXT "] ";
+    /* The string that will be appended before all error messages. */
+    static const std::string fatal_msg = "[" BRED "FAIL" TEXT "] ";
 
 
 
