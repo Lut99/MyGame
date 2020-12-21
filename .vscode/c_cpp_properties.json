@@ -5,7 +5,8 @@
                 "${myDefaultIncludePath}",
                 "C:/Users/Tim/Vulkan/1.2.162.0/Include",
                 "C:/Users/Tim/glfw/include",
-                "C:/Users/Tim/glm"
+                "C:/Users/Tim/glm",
+                "src/HelloVikingRoom/lib/debug"
             ],
             "intelliSenseMode": "msvc-x64",
             "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.26.28801/bin/Hostx64/x64/cl.exe",

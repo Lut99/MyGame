@@ -17,9 +17,6 @@
 **/
 
 #include <algorithm>
-#include <chrono>
-#include <ctime>
-#include <sstream>
 #include <stdexcept>
 
 #include "Debug.hpp"
@@ -33,84 +30,129 @@ Debugger::Debugger() {}
 
 
 
-/* Actually prints the message to the given output stream. */
-void Debugger::_log(std::ostream& os, Severity severity, const std::string& message, size_t extra_indent) {
-    // // Fetch the individual timestamp values as strings of the right size
-    // if (severity != Severity::auxillary) {
-    //     std::time_t cnow = std::time(0);
-    //     std::tm* now = std::localtime(&cnow);
-    //     std::string hours = std::to_string(now->tm_hour);
-    //     if (hours.size() < 2) { hours = '0' + hours; }
-    //     std::string minutes = std::to_string(now->tm_min);
-    //     if (minutes.size() < 2) { minutes = '0' + minutes; }
-    //     std::string seconds = std::to_string(now->tm_sec);
-    //     if (seconds.size() < 2) { seconds = '0' + seconds; }
-    //     std::string milliseconds = std::to_string((std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()) % 1000).count());
-    //     while (milliseconds.size() < 3) { milliseconds = '0' + milliseconds; }
-
-    //     // Already write to the output stream
-    //     os << '[' << hours << ':' << minutes << ':' << seconds << '.' << milliseconds << "] ";
-    // } else {
-    //     os << "               ";
-    // }
-
-    // Determine the type of message to preprend to signify how it went
-    std::string indicator;
-    switch(severity) {
-        case Severity::auxillary:
-            os << auxillary_msg;
-            break;
-
-        case Severity::info:
-            os << info_msg;
-            break;
-
-        case Severity::warning:
-            os << warning_msg;
-            break;
-
-        case Severity::nonfatal:
-            os << nonfatal_msg;
-            break;
-
-        case Severity::fatal:
-            os << fatal_msg;
-            break;
-
-        default:
-            os << "[" RED "????" TEXT "] ";
-    }
-
-    // Add indents
-    os << std::string(this->indent_level * 3, ' ');
-
-    // Write the message to the target stream, linewrapped
-    size_t x = 0;
-    size_t width = max_line_width - 7 - this->indent_level * 3;
+/* Prints a given string over multiple lines, pasting n spaces in front of each one and linewrapping on the target width. Optionally, a starting x can be specified. */
+void Debugger::print_linewrapped(std::ostream& os, size_t& x, size_t width, const std::string& message) {
+    // Get the string to be pasted in front of every new line
+    std::string prefix = std::string(7 + this->indent_level * 3, ' ');
+    // Loop to print each character
     for (size_t i = 0; i < message.size(); i++) {
         if (++x >= width) {
-            // Write a newline
-            os << std::endl << std::string(7 + this->indent_level * 3, ' ');
+            os << std::endl << prefix;
             x = 0;
         }
         os << message[i];
     }
+}
 
-    // Done, always reset the colours
-    os << TEXT << std::endl;
+/* Actually prints the message to the given output stream. */
+void Debugger::_log(std::ostream& os, Severity severity, const std::string& message, size_t extra_indent) {
+    using namespace SeverityValues;
 
-    // If fatal, throw the error
-    if (severity == Severity::fatal) {
-        throw std::runtime_error(message);
+    // Determine the type of message to preprend to signify how it went
+    switch(severity) {
+        case auxillary:
+            // Print as a prefix; i.e., a plain message with correct indents
+            {
+                size_t x = 0;
+                size_t width = max_line_width - 7 - this->indent_level * 3;
+                os << auxillary_msg << std::string(this->indent_level * 3, ' ');
+                this->print_linewrapped(os, x, width, message);
+                os << TEXT << std::endl;
+                return;
+            }
+
+        case info:
+            // Print as info; pretty much the same, except that we now prepent with the info message
+            {
+                size_t x = 0;
+                size_t width = max_line_width - 7 - this->indent_level * 3;
+                os << info_msg << std::string(this->indent_level * 3, ' ');
+                this->print_linewrapped(os, x, width, message);
+                os << TEXT << std::endl;
+                return;
+            }
+
+        case warning:
+            // Print as warning; the same as info with a different prexif, plus we print the origin of the line
+            {
+                std::string to_print = message;
+                if (this->stack.size() > 0) {
+                    Frame f = this->stack[this->stack.size() - 1];
+                    to_print += "    [in function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m]";
+                }
+
+                // Print the new message as normal
+                size_t x = 0;
+                size_t width = max_line_width - 7 - this->indent_level * 3;
+                os << warning_msg << std::string(this->indent_level * 3, ' ');
+                this->print_linewrapped(os, x, width, to_print);
+                os << TEXT << std::endl;
+                return;
+            }
+
+        case nonfatal:
+            // Print as nonfatal error; add some extra spacing around the message, and provide the full stacktrace
+            {
+                size_t x = 0;
+                size_t width = max_line_width - 7 - this->indent_level * 3;
+                os << nonfatal_msg;
+                this->print_linewrapped(os, x, width, message);
+                os << TEXT << std::endl;
+
+                // Print a stacktrace, if any
+                if (this->stack.size() > 0) {
+                    os << "       \033[1mStacktrace:\033[0m" << std::endl;
+                    for (size_t i = 0; i < this->stack.size(); i++) {
+                        x = 0;
+                        Frame f = this->stack[this->stack.size() - 1 - i];
+                        std::string prefix = i == 0 ? "in" : "from";
+                        this->print_linewrapped(os, x, width, "       " + prefix + " function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m");
+                        os << TEXT << std::endl;
+                    }
+                    os << std::endl;
+                }
+
+                return;
+            }
+
+        case fatal:
+            // Print as fatal error; add some extra spacing around the message, provide the full stacktrace, then throw the error
+            {
+                size_t x = 0;
+                size_t width = max_line_width - 7 - this->indent_level * 3;
+                os << fatal_msg;
+                this->print_linewrapped(os, x, width, message);
+                os << TEXT << std::endl;
+
+                // Print a stacktrace, if any
+                if (this->stack.size() > 0) {
+                    os << "       \033[1mStacktrace:\033[0m" << std::endl;
+                    for (size_t i = 0; i < this->stack.size(); i++) {
+                        x = 0;
+                        Frame f = this->stack[this->stack.size() - 1 - i];
+                        std::string prefix = i == 0 ? "in" : "from";
+                        this->print_linewrapped(os, x, width, "       " + prefix + " function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m");
+                        os << TEXT << std::endl;
+                    }
+                    os << std::endl;
+                }
+
+                // Return by throwing
+                throw std::runtime_error(message);
+            }
+
+        default:
+            // Let's re-do as auxillary
+            this->_log(os, auxillary, message, extra_indent);
     }
 }
 
 
 
 /* Enters a new function, popping it's value on the stack. */
-void Debugger::push(const std::string& function_name, const std::string& file_name) {
+void Debugger::push(const std::string& function_name, const std::string& file_name, size_t line_number) {
     // Create a new stack frame
-    Frame frame({ function_name, file_name });
+    Frame frame({ function_name, file_name, line_number });
 
     // Push it on the stack
     this->stack.push_back(frame);

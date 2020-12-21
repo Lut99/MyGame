@@ -22,20 +22,14 @@
 #include "Debug.hpp"
 
 using namespace std;
+using namespace Debug::SeverityValues;
 
 
 /***** ENTRY POINT *****/
 int main() {
-    cout << endl << "##### HELLO VIKINGROOM #####" << endl << endl;
+    DENTER("main");
+
     
-    Debug::debugger.log(Debug::Severity::auxillary, "Auxillary");
-    Debug::debugger.log(Debug::Severity::info, "TeshhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhtTesthhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhht");
-    Debug::debugger.log(Debug::Severity::warning, "Warning");
-    Debug::debugger.log(Debug::Severity::nonfatal, "Non-Fatal error");
-    try {
-        Debug::debugger.log(Debug::Severity::fatal, "Fatal error");
-    } catch (std::exception& e) {
-        return EXIT_FAILURE;
-    }
-    return EXIT_SUCCESS;
+
+    DRETURN EXIT_SUCCESS;
 }

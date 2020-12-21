@@ -28,29 +28,42 @@
 #define RED "\033[31;1m"
 #define YELLOW "\033[33m"
 #define GREEN "\033[32;1m"
-/* Background colours */
-#define BRED "\033[41;1m"
-#define BYELLOW "\033[43m"
-#define BGREEN "\033[42;1m"
+/* Swaps the foreground and background colours. */
+#define REVERSED "\033[7m"
 /* Reset colour */
 #define TEXT "\033[0m"
 
 #ifdef DEBUG
 /***** MACROS WHEN DEBUGGING IS ENABLED *****/
 
-/* Use this when entering a function, to log it's usage on the debugging stack. */
-#define DEBUG_ENTER(FUNC_NAME) \
-    Debug::debugger.push_function((FUNC_NAME), (__FILE__));
-
-/* Use this to return from a function with a value, popping the function from the debugging stack. */
-#define DEBUG_RETURN(VALUE) \
+/* Wraps any function call, registring it on the debugger's stacktrace. */
+#define DENTER(FUNC_NAME) \
+    Debug::debugger.push((FUNC_NAME), (__FILE__), (__LINE__) - 1);
+/* Wraps the return statement, first popping the current value from the stack. */
+#define DRETURN \
     Debug::debugger.pop(); \
-    return (VALUE);
-/* Use this to return from a function without a value, popping the function from the debugging stack. */
-#define DEBUG_RETURN_VOID \
-    Debug::debugger.pop(); \
-    return;
+    return
 
+/* Mutes function with the given name. */
+#define DMUTE(FUNC_NAME) \
+    Debug::debugger.mute((FUNC_NAME));
+/* Unmutes function with the given name. */
+#define DUNMUTE(FUNC_NAME) \
+    Debug::debugger.mute((FUNC_NAME));
+
+/* Increase the indent of the logger by N steps. */
+#define DINDENT \
+    Debug::debugger.indent();
+/* Decrease the indent of the logger by N steps. */
+#define DDEDENT \
+    Debug::debugger.dedent();
+
+/* Logs using the debugger. */
+#define DLOG(SEVERITY, MESSAGE) \
+    Debug::debugger.log((SEVERITY), (MESSAGE));
+/* Logs using the debugger with extra indent. */
+#define DLOGi(SEVERITY, MESSAGE, INDENT) \
+    Debug::debugger.log((SEVERITY), (MESSAGE), (INDENT));
 
 
 /* Increases the indent in the debug levels. */
@@ -58,14 +71,26 @@
 #else
 /***** MACROS WHEN DEBUGGING IS DISABLED *****/
 
-/* Use this when entering a function, to log it's usage on the debugging stack. */
-#define DEBUG_PUSH(FUNC_NAME)
-/* Use this to return from a function with a value, popping the function from the debugging stack. */
-#define DEBUG_RETURN(VALUE) \
-    return (VALUE);
-/* Use this to return from a function without a value, popping the function from the debugging stack. */
-#define DEBUG_RETURN_VOID \
-    return;
+/* Wraps any function call, registring it on the debugger's stacktrace. */
+#define DENTER(FUNC_NAME)
+/* Wraps the return statement, first popping the current value from the stack. */
+#define DRETURN \
+    return
+
+/* Mutes function with the given name. */
+#define DMUTE(FUNC_NAME)
+/* Unmutes function with the given name. */
+#define DUNMUTE(FUNC_NAME)
+
+/* Increase the indent of the logger by N steps. */
+#define DINDENT
+/* Decrease the indent of the logger by N steps. */
+#define DDEDENT
+
+/* Logs using the debugger. */
+#define DLOG(SEVERITY, MESSAGE)
+/* Logs using the debugger with extra indent. */
+#define DLOGi(SEVERITY, MESSAGE, INDENT)
 
 #endif
 
@@ -83,23 +108,26 @@ namespace Debug {
     /* The string that will be appended before all error messages. */
     static const std::string nonfatal_msg = "[" RED "FAIL" TEXT "] ";
     /* The string that will be appended before all error messages. */
-    static const std::string fatal_msg = "[" BRED "FAIL" TEXT "] ";
+    static const std::string fatal_msg = "[" RED REVERSED "FAIL" TEXT "] ";
 
 
 
     /* Enum that defines the possible debug message types. */
-    enum class Severity {
-        // Only provides the necessary indents, but does not print a message.
-        auxillary,
-        // Prints a message with 'OK' prepended to it
-        info,
-        // Prints a message with 'WARN' prepended to it
-        warning,
-        // Prints a message with 'FAIL' prepended to it
-        nonfatal,
-        // Prints a message with 'FAIL' prepended to it, then throws a std::runtime_error
-        fatal
-    };
+    namespace SeverityValues {
+        enum type {
+            // Only provides the necessary indents, but does not print a message.
+            auxillary,
+            // Prints a message with 'OK' prepended to it
+            info,
+            // Prints a message with 'WARN' prepended to it
+            warning,
+            // Prints a message with 'FAIL' prepended to it
+            nonfatal,
+            // Prints a message with 'FAIL' prepended to it, then throws a std::runtime_error
+            fatal
+        };
+    }
+    using Severity = SeverityValues::type;
 
     /* Struct used to refer to a stack frame. */
     struct Frame {
@@ -107,6 +135,8 @@ namespace Debug {
         std::string func_name;
         /* The file where the function resides. */
         std::string file_name;
+        /* The line number where the function is defined (i.e., the line above DENTER). */
+        size_t line_number;
     };
 
 
@@ -122,6 +152,8 @@ namespace Debug {
         /* The current number of indents specified. */
         size_t indent_level;
 
+        /* Prints a given string over multiple lines, pasting n spaces in front of each one and linewrapping on the target width. Optionally, a starting x can be specified. */
+        void print_linewrapped(std::ostream& os, size_t& x, size_t width, const std::string& message);
         /* Actually prints the message to a given stream. */
         void _log(std::ostream& os, Severity severity, const std::string& message, size_t extra_indent);
 
@@ -130,7 +162,7 @@ namespace Debug {
         Debugger();
         
         /* Enters a new function, popping it's value on the stack. */
-        void push(const std::string& function_name, const std::string& file_name);
+        void push(const std::string& function_name, const std::string& file_name, size_t line_number);
         /* pops the top function name of the stack. */
         inline void pop() { this->stack.pop_back(); }
 
