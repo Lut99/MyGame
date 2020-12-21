@@ -13,7 +13,9 @@ SRC	=src
 LIB	=$(SRC)\lib
 BIN	=bin
 OBJ	=$(BIN)\obj
-TEST=tests\
+TEST=tests
+TEST_BIN=$(BIN)\tests
+TEST_OBJ=$(TEST_BIN)\obj
 VULKANTEST=$(SRC)/VulkanTest
 
 HELLOTRIANGLE=$(SRC)\HelloTriangle
@@ -24,10 +26,10 @@ HELLOVIKINGROOM=$(SRC)\HelloVikingRoom
 HELLOVIKINGROOM_LIB=$(HELLOVIKINGROOM)\lib
 HELLOVIKINGROOM_SHADERS=$(HELLOVIKINGROOM_LIB)\shaders
 HELLOVIKINGROOM_SHADERS_BIN=$(HELLOVIKINGROOM_SHADERS)\bin
-HELLOVIKINGROOM_DIRS=debug
+HELLOVIKINGROOM_DIRS=Application Debug Tools Vulkan
 HELLOVIKINGROOM_OBJS=$(HELLOVIKINGROOM_DIRS:%=$(OBJ)\HelloVikingRoom\\%)
-HELLOVIKINGROOM_INCLUDE=$(HELLOVIKINGROOM_DIRS:%=-I$(HELLOVIKINGROOM_LIB)\\%)
-HELLOVIKINGROOM_DEPENDENCIES=$(OBJ)\HelloVikingRoom\debug\Debug.obj
+HELLOVIKINGROOM_INCLUDE=-I$(HELLOVIKINGROOM_LIB)
+HELLOVIKINGROOM_DEPENDENCIES=$(OBJ)\HelloVikingRoom\Application\MainWindow.obj $(OBJ)\HelloVikingRoom\Debug\Debug.obj $(OBJ)\HelloVikingRoom\Vulkan\Instance.obj
 
 
 
@@ -39,7 +41,7 @@ endif
 
 
 ##### PHONY RULES #####
-.PHONY: default vulkantest hellotriangle hellovikingroom all dirs clean
+.PHONY: default vulkantest hellotriangle hellovikingroom test_array all dirs clean
 default: all
 
 all: vulkantest hellotriangle hellovikingroom
@@ -56,6 +58,10 @@ clean:
 
 $(BIN):
 	md $@
+$(TEST_BIN):
+	md $@
+$(TEST_OBJ):
+	md $@
 $(OBJ):
 	md $@
 $(OBJ)\VulkanTest:
@@ -64,13 +70,19 @@ $(OBJ)\HelloTriangle:
 	md $@
 $(OBJ)\HelloVikingRoom:
 	md $@
-$(OBJ)\HelloVikingRoom\debug:
+$(OBJ)\HelloVikingRoom\Application:
+	md $@
+$(OBJ)\HelloVikingRoom\Debug:
+	md $@
+$(OBJ)\HelloVikingRoom\Tools:
+	md $@
+$(OBJ)\HelloVikingRoom\Vulkan:
 	md $@
 $(HELLOTRIANGLE_SHADERS_BIN):
 	md $@
 $(HELLOVIKINGROOM_SHADERS_BIN):
 	md $@
-dirs: $(BIN) $(OBJ) $(OBJ)\VulkanTest $(OBJ)\HelloTriangle $(OBJ)\HelloVikingRoom $(HELLOVIKINGROOM_OBJS) $(HELLOTRIANGLE_SHADERS_BIN) $(HELLOVIKINGROOM_SHADERS_BIN)
+dirs: $(BIN) $(TEST_BIN) $(TEST_OBJ) $(OBJ) $(OBJ)\VulkanTest $(OBJ)\HelloTriangle $(OBJ)\HelloVikingRoom $(HELLOVIKINGROOM_OBJS) $(HELLOTRIANGLE_SHADERS_BIN) $(HELLOVIKINGROOM_SHADERS_BIN)
 
 
 
