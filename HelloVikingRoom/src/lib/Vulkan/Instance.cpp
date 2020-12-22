@@ -99,6 +99,9 @@ Vulkan::Instance::Instance(const Tools::Array<const char*>& required_extensions,
     VkApplicationInfo app_info;
     populate_application_info(&app_info);
 
+    uint32_t n_local_required_layers = 1;
+    const char* local_required_layers[] = { "VK_LAYER_KHRONOS_validation", "VK_LAYER_LUNARG_monitor" };
+
     // Next, we'll list which extensions to use
     VkInstanceCreateInfo instance_info{};
     instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -107,8 +110,8 @@ Vulkan::Instance::Instance(const Tools::Array<const char*>& required_extensions,
     instance_info.enabledExtensionCount = static_cast<uint32_t>(required_extensions.size());
     instance_info.ppEnabledExtensionNames = required_extensions.data();
     // Tell Vulkan we want to enable our chosen layers
-    instance_info.enabledLayerCount = static_cast<uint32_t>(required_layers.size());;
-    instance_info.ppEnabledLayerNames = required_layers.data();
+    instance_info.enabledLayerCount = n_local_required_layers;//static_cast<uint32_t>(required_layers.size());;
+    instance_info.ppEnabledLayerNames = local_required_layers;//required_layers.data();
     // Then, provide a debugger create_info the the instance s.t. we can already begin getting debug messages
     VkDebugUtilsMessengerCreateInfoEXT debug_info;
     Debugger::populate_messenger_info(&debug_info);
