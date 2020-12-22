@@ -38,7 +38,7 @@ const Array<const char*> device_extensions = {
 };
 /* List of validation layers that we want to be enabled. */
 const Array<const char*> required_layers = {
-    
+    "VK_LAYER_KHRONOS_validation"
 };
 
 
