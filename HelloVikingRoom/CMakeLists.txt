@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.10)
 # set the project name and version
 project(HelloVikingRoom VERSION 1.0.0)
 
+# If we're on Windows, prefix the prefix path
+IF(WIN32)
+list(APPEND CMAKE_PREFIX_PATH "C:/Program Files (x86)/GLFW/lib/cmake/glfw3")
+ENDIF()
+
 # Be sure that both Vulkan & GLFW are installed
 find_package(Vulkan REQUIRED)
 find_package(glfw3 3.3 REQUIRED)

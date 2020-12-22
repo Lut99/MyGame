@@ -225,13 +225,6 @@ namespace Tools {
             memmove(this->raw_data + index, this->raw_data + index + 1, sizeof(T) * (this->length - index - 1));
         }
 
-        /* Returns a string describing this Array. */
-        std::string to_string() const {
-            std::stringstream sstr;
-            sstr << "Array<T>(" << this->length << ")";
-            return sstr.str();
-        }
-
         /* Copy assignment operator for the Array class. Only enabled if the type has a copy constructor available. */
         inline Array& operator=(const Array& other) {
             // Make sure that the class is copy constructible
@@ -255,19 +248,6 @@ namespace Tools {
         }
 
     };
-
-    /* Returns a string describing this Array. */
-    template <>
-    std::string Array<const char*>::to_string() const {
-        std::stringstream sstr;
-        sstr << "Array<const char*>(";
-        for (size_t i = 0; i < this->length; i++) {
-            if (i > 0) { sstr << ", "; }
-            sstr << '"' << this->raw_data[i] << '"';
-        }
-        sstr << ")";
-        return sstr.str();
-    }
 
 }
 
