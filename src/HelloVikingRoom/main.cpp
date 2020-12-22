@@ -38,7 +38,7 @@ const Array<const char*> device_extensions = {
 };
 /* List of validation layers that we want to be enabled. */
 const Array<const char*> required_layers = {
-    "VK_LAYER_KHRONOS_validation"
+    
 };
 
 
@@ -89,7 +89,7 @@ void verify_global_extensions(const Array<const char*>& to_verify) {
     for (size_t i = 0; i < to_verify.size(); i++) {
         // Check if this extension is in the list
         bool found = false;
-        for (size_t j = 0; j < existing_extensions.size(); j++) {
+        for (size_t j = 0; j < existing_extensions.capacity(); j++) {
             if (strcmp(to_verify[i], existing_extensions[j].extensionName) == 0) {
                 // It exists
                 found = true;
@@ -97,13 +97,13 @@ void verify_global_extensions(const Array<const char*>& to_verify) {
             }
         }
         if (!found) {
-            DLOG(warning, "Extension '" << to_verify[i] << "' is not supported");
+            DLOG(warning, std::string("Extension '") + to_verify[i] + "' is not supported");
             errored = true;
         }
     }
     DDEDENT;
     if (errored) {
-        DLOG(fatal, "Missing required extensionsm cannot continue.");
+        DLOG(fatal, "Missing required extensions; cannot continue.");
     }
 
     // Done
@@ -131,7 +131,7 @@ Array<const char*> trim_layers(const Array<const char*>& to_trim) {
     for (size_t i = 0; i < to_trim.size(); i++) {
         // Check if this extension is in the list
         bool found = false;
-        for (size_t j = 0; j < existing_layers.size(); j++) {
+        for (size_t j = 0; j < existing_layers.capacity(); j++) {
             if (strcmp(to_trim[i], existing_layers[j].layerName) == 0) {
                 // It exists
                 supported_layers.push_back(existing_layers[j].layerName);
@@ -140,7 +140,7 @@ Array<const char*> trim_layers(const Array<const char*>& to_trim) {
             }
         }
         if (!found) {
-            DLOG(warning, "Layer '" << to_verify[i] << "' is not supported");
+            DLOG(warning, std::string("Layer '") + to_trim[i] + "' is not supported");
         }
     }
     DDEDENT;
@@ -163,26 +163,38 @@ int main() {
     DLOG(auxillary, "<<<<< HELLO VIKINGROOM >>>>>");
     DLOG(auxillary, "");
 
-    // Get all the extensions for our window library
-    Array<const char*> global_extensions = get_global_extensions();
-    // Check if we can use them
-    verify_global_extensions(global_extensions);
+    // Wrap all code in a try/catch to neatly handle the errors that our DEBUGGER may throw
+    try {
+        // Get all the extensions for our window library
+        Array<const char*> global_extensions = get_global_extensions();
+        // Check if we can use them
+        verify_global_extensions(global_extensions);
 
-    // Create a vulkan instance
-    #ifdef DEBUG
-    // If debug is defined, then also check if the layers are supported
-    Array<const char*> trimmed_layers = trim_layers(required_layers);
-    Vulkan::Instance instance(global_extensions, trimmed_layers);
-    #else
-    // Just add the extensions, no validation layers
-    Vulkan::Instance instance(global_extensions);
-    #endif
+        // Create a vulkan instance
+        #ifdef DEBUG
+        // If debug is defined, then also check if the layers are supported
+        Array<const char*> trimmed_layers = trim_layers(required_layers);
+        Vulkan::Instance instance(global_extensions, trimmed_layers);
+        #else
+        // Just add the extensions, no validation layers
+        Vulkan::Instance instance(global_extensions);
+        #endif
 
-    // Create a window with that instance
-    MainWindow window(instance, "Hello Viking Room", 800, 600);
+        // Create a window with that instance
+        MainWindow window(instance, "Hello Viking Room", 800, 600);
+
+        // Run the main loop
+        DLOG(info, "Running main loop...");
+        while (!window.done()) {
+            window.do_events();
+        }
+    } catch (std::exception&) {
+        DRETURN EXIT_FAILURE;
+    }
 
     DLOG(auxillary, "");
     DLOG(auxillary, "Done.");
+    DLOG(auxillary, "");
 
     DRETURN EXIT_SUCCESS;
 }

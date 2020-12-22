@@ -33,3 +33,6 @@
 
 # And everything under bin
 bin/
+
+# Also any traces
+*.pdb

@@ -43,7 +43,7 @@ Vulkan::Debugger::Debugger(const Instance& instance) :
 
     // We'll create the messenger by using our populate() call
     VkDebugUtilsMessengerCreateInfoEXT debug_info;
-    this->populate_messenger_info(debug_info);
+    this->populate_messenger_info(&debug_info);
     if (vkCreateDebugUtilsMessengerEXT(this->instance, &debug_info, nullptr, &this->vk_debugger) != VK_SUCCESS) {
         DLOG(fatal, "Could not setup Vulkan's debug messenger.");
     }
@@ -113,24 +113,24 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Vulkan::Debugger::vk_callback(
 
 
 /* Populates a given create_info struct for the VkDebugUtilsMessengerEXT class. */
-void Vulkan::Debugger::populate_messenger_info(VkDebugUtilsMessengerCreateInfoEXT debug_info) {
+void Vulkan::Debugger::populate_messenger_info(VkDebugUtilsMessengerCreateInfoEXT* debug_info) {
     DENTER("Vulkan::Debugger::populate_messenger_info");
 
     // Do the default initialization
-    debug_info = {};
-    debug_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    *debug_info = {};
+    debug_info->sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
 
     // Define the severities we'll get called for
-    debug_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    debug_info->messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 
-    // Define the message types we'll get called for
-    debug_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    // Define ->he message types we'll get called for
+    debug_info->messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 
     // Mark what our callback is (the one that utilizes our own debugger)
-    debug_info.pfnUserCallback = Vulkan::Debugger::vk_callback;
+    debug_info->pfnUserCallback = Vulkan::Debugger::vk_callback;
 
     // Optionally, provide a struct to pass to the callback
-    debug_info.pUserData = nullptr;
+    debug_info->pUserData = nullptr;
 
     DRETURN;
 }

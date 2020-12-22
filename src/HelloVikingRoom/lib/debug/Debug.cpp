@@ -33,13 +33,21 @@ Debugger::Debugger() {}
 /* Prints a given string over multiple lines, pasting n spaces in front of each one and linewrapping on the target width. Optionally, a starting x can be specified. */
 void Debugger::print_linewrapped(std::ostream& os, size_t& x, size_t width, const std::string& message) {
     // Get the string to be pasted in front of every new line
-    std::string prefix = std::string(7 + this->indent_level * 3, ' ');
+    std::string prefix = std::string(7 + this->indent_level * 7, ' ');
     // Loop to print each character
+    bool ignoring = false;
     for (size_t i = 0; i < message.size(); i++) {
-        if (++x >= width) {
+        // If we're seeing a '\033', ignore until an 'm' is reached
+        if (ignoring && message[i] == '\033') { ignoring = true; }
+        else if (!ignoring && message[i] == 'm') { ignoring = false; }
+
+        // Otherwise, check if we should print a newline (only when we're not printing color codes)
+        if (ignoring && ++x >= width) {
             os << std::endl << prefix;
             x = 0;
         }
+
+        // Print the character itself
         os << message[i];
     }
 }
@@ -68,8 +76,8 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
 
                 // Otherwise, we're clear to print the message
                 size_t x = 0;
-                size_t width = max_line_width - 7 - this->indent_level * 3;
-                os << auxillary_msg << std::string(this->indent_level * 3, ' ');
+                size_t width = max_line_width - 7 - this->indent_level * 7;
+                os << std::string(this->indent_level * 7, ' ') << auxillary_msg;
                 this->print_linewrapped(os, x, width, message);
                 os << TEXT << std::endl;
                 return;
@@ -90,8 +98,8 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
 
                 // Otherwise, we're clear to print the message
                 size_t x = 0;
-                size_t width = max_line_width - 7 - this->indent_level * 3;
-                os << info_msg << std::string(this->indent_level * 3, ' ');
+                size_t width = max_line_width - 7 - this->indent_level * 7;
+                os << std::string(this->indent_level * 7, ' ') << info_msg;
                 this->print_linewrapped(os, x, width, message);
                 os << TEXT << std::endl;
                 return;
@@ -110,19 +118,23 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                     }
                 }
 
-                // Otherwise, we're clear to print the message
-                std::string to_print = message;
-                if (this->stack.size() > 0) {
-                    Frame f = this->stack[this->stack.size() - 1];
-                    to_print += "    [in function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m]";
-                }
-
                 // Print the new message as normal
                 size_t x = 0;
-                size_t width = max_line_width - 7 - this->indent_level * 3;
-                os << warning_msg << std::string(this->indent_level * 3, ' ');
-                this->print_linewrapped(os, x, width, to_print);
+                size_t width = max_line_width - 7 - this->indent_level * 7;
+                os << std::string(this->indent_level * 7, ' ') << warning_msg;
+                this->print_linewrapped(os, x, width, message);
                 os << TEXT << std::endl;
+
+                // If there is a stack, display the stack message
+                if (this->stack.size() > 0) {
+                    Frame f = this->stack[this->stack.size() - 1];
+                    std::string to_print = "[in function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m]";
+                    os << std::string(7 + this->indent_level * 7, ' ');
+                    x = 0;
+                    this->print_linewrapped(os, x, width, to_print);
+                    os << TEXT << std::endl;
+                }
+
                 return;
             }
 
@@ -130,7 +142,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
             // Print as nonfatal error; add some extra spacing around the message, and provide the full stacktrace
             {
                 size_t x = 0;
-                size_t width = max_line_width - 7 - this->indent_level * 3;
+                size_t width = max_line_width - 7;
                 os << nonfatal_msg;
                 this->print_linewrapped(os, x, width, message);
                 os << TEXT << std::endl;
@@ -155,7 +167,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
             // Print as fatal error; add some extra spacing around the message, provide the full stacktrace, then throw the error
             {
                 size_t x = 0;
-                size_t width = max_line_width - 7 - this->indent_level * 3;
+                size_t width = max_line_width - 7;
                 os << fatal_msg;
                 this->print_linewrapped(os, x, width, message);
                 os << TEXT << std::endl;

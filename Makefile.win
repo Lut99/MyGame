@@ -5,7 +5,7 @@ colon := :
 # Compilers
 CC=cl
 LINKER=link
-CC_ARGS=-std:c++17 -O2 -W3 -EHcs -I"%VULKAN_SDK%/Include" -I"C:/Users/Tim/glfw/include" -I"C:/Users/Tim/glm"
+CC_ARGS=/std:c++17 /O2 /W3 /EHcs /I"%VULKAN_SDK%/Include" /I"C:/Users/Tim/glfw/include" /I"C:/Users/Tim/glm"
 LINKER_ARGS=/LIBPATH:"C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.26.28801/lib/x64" /LIBPATH:"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/um/x64" /LIBPATH:"C:/Program Files (x86)/Windows Kits/10/Lib/10.0.19041.0/ucrt/x64" /LIBPATH:"%VULKAN_SDK%/Lib"  /LIBPATH:"C:/Users/Tim/glfw/lib-vc2019" vulkan-1.lib glfw3dll.lib
 
 # Folders
@@ -29,13 +29,13 @@ HELLOVIKINGROOM_SHADERS_BIN=$(HELLOVIKINGROOM_SHADERS)\bin
 HELLOVIKINGROOM_DIRS=Application Debug Tools Vulkan
 HELLOVIKINGROOM_OBJS=$(HELLOVIKINGROOM_DIRS:%=$(OBJ)\HelloVikingRoom\\%)
 HELLOVIKINGROOM_INCLUDE=-I$(HELLOVIKINGROOM_LIB)
-HELLOVIKINGROOM_DEPENDENCIES=$(OBJ)\HelloVikingRoom\Application\MainWindow.obj $(OBJ)\HelloVikingRoom\Debug\Debug.obj $(OBJ)\HelloVikingRoom\Vulkan\Instance.obj
+HELLOVIKINGROOM_DEPENDENCIES=$(OBJ)\HelloVikingRoom\Application\MainWindow.obj $(OBJ)\HelloVikingRoom\Debug\Debug.obj $(OBJ)\HelloVikingRoom\Vulkan\Instance.obj $(OBJ)\HelloVikingRoom\Vulkan\Debugger.obj
 
 
 
 ##### INPUT #####
 ifdef DEBUG
-CC_ARGS += -DEBUG -DDEBUG
+CC_ARGS += /Zi /DEBUG /DDEBUG
 endif
 
 

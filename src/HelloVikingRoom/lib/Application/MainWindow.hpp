@@ -60,6 +60,8 @@ namespace HelloVikingRoom {
 
         /* Runs the events for the internal window. */
         void do_events();
+        /* Returns if the window is done with events or not. */
+        inline bool done() const { return (bool) glfwWindowShouldClose(this->window); }
 
         /* Returns whether or not the window recently resized. */
         inline bool resized() const { return this->did_resize; }

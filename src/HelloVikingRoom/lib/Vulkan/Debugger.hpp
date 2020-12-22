@@ -51,7 +51,7 @@ namespace HelloVikingRoom::Vulkan {
         );
 
         /* Populates a given create_info struct for the VkDebugUtilsMessengerEXT class. */
-        static void populate_messenger_info(VkDebugUtilsMessengerCreateInfoEXT debug_info);
+        static void populate_messenger_info(VkDebugUtilsMessengerCreateInfoEXT* debug_info);
 
         /* Explicity retrieves the internal VkDebugUtilsMessengerEXT class. */
         inline VkDebugUtilsMessengerEXT debugger() const { return this->vk_debugger; }

@@ -60,7 +60,7 @@ MainWindow::MainWindow(MainWindow&& other) :
 /* Destructor for the MainWindow class. */
 MainWindow::~MainWindow() {
     DENTER("MainWindow::~MainWindow");
-    DLOG(auxillary, "Cleaning MainWindow...");
+    DLOG(info, "Cleaning MainWindow...");
 
     // Destroy the wrapped window object
     glfwDestroyWindow(this->window);
