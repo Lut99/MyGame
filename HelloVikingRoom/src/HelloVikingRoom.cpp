@@ -1,4 +1,4 @@
-/* MAIN.cpp
+/* HELLO VIKING ROOM.cpp
  *   by Lut99
  *
  * Created:
@@ -59,7 +59,7 @@ Array<const char*> get_global_extensions() {
     // Put them in an array
     Array<const char*> result(glfw_extensions, n_glfw_extensions);
 
-    #ifdef DEBUG
+    #ifndef NDEBUG
     // We'll add the extension for the debugger
     result.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     #endif
@@ -171,7 +171,7 @@ int main() {
         verify_global_extensions(global_extensions);
 
         // Create a vulkan instance
-        #ifdef DEBUG
+        #ifndef NDEBUG
         // If debug is defined, then also check if the layers are supported
         Array<const char*> trimmed_layers = trim_layers(required_layers);
         Vulkan::Instance instance(global_extensions, trimmed_layers);

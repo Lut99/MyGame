@@ -31,8 +31,9 @@
 *.out
 *.app
 
-# And everything under bin
+# And everything under bin & build
 bin/
+build/
 
-# Also any traces
+# Also any windows debug symbols
 *.pdb

@@ -34,7 +34,7 @@
 /* Reset colour */
 #define TEXT "\033[0m"
 
-#ifdef DEBUG
+#ifndef NDEBUG
 /***** MACROS WHEN DEBUGGING IS ENABLED *****/
 
 /* Wraps any function call, registring it on the debugger's stacktrace. */

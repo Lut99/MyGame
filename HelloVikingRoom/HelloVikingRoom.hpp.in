@@ -1,0 +1,4 @@
+// the configured options and settings for Tutorial
+#define HVR_VERSION_MAJOR @HelloVikingRoom_VERSION_MAJOR@
+#define HVR_VERSION_MINOR @HelloVikingRoom_VERSION_MINOR@
+#define HVR_VERSION_PATCH @HelloVikingRoom_PATCH_VERSION@

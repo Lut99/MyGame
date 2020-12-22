@@ -13,6 +13,10 @@
  *   and deallocation.
 **/
 
+#define XSTR(x) STR(x)
+#define STR(x) #x
+
+#include <iostream>
 #include <vector>
 
 #include "Debug/Debug.hpp"
@@ -35,7 +39,7 @@ void populate_application_info(VkApplicationInfo* app_info) {
     app_info->sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 
     // Define the application's name
-    app_info->pApplicationName = "Hello Viking Room";
+    app_info->pApplicationName = "HelloVikingRoom";
 
     // Define the application's version
     app_info->applicationVersion = VK_MAKE_VERSION(1, 0, 0);
