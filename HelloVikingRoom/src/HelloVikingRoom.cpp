@@ -19,10 +19,10 @@
 #include <vulkan/vulkan.h>
 #include <iostream>
 #include <exception>
+#include <array>
 
 #include "Vulkan/Instance.hpp"
 #include "Application/MainWindow.hpp"
-#include "Tools/Array.hpp"
 #include "Debug/Debug.hpp"
 
 using namespace std;
@@ -33,12 +33,12 @@ using namespace Debug::SeverityValues;
 
 /***** CONSTANTS *****/
 /* List of device extensions that we want to be enabled. */
-const Array<const char*> device_extensions = {
+const std::array<const char*, 1> device_extensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 /* List of validation layers that we want to be enabled. */
-const Array<const char*> required_layers = {
-    "VK_LAYER_KHRONOS_validation"
+const char* required_layers[] = {
+    "VK_LAYER_KHRONOS_validation", "VK_LAYER_LUNARG_monitor"
 };
 
 
