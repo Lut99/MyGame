@@ -4,7 +4,7 @@
  * Created:
  *   12/22/2020, 5:37:41 PM
  * Last edited:
- *   12/22/2020, 5:59:02 PM
+ *   12/22/2020, 7:26:41 PM
  * Auto updated?
  *   Yes
  *
@@ -75,6 +75,12 @@ public:
         return *this;
     }
 };
+
+/* The hardest class, which implements polymorphism (parent class). */
+template <class T>
+class ParentClass {
+    
+}
 
 
 
