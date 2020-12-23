@@ -46,17 +46,26 @@ target_link_libraries(hellovikingroom PUBLIC
 ##### TARGET FOR TESTS #####
 # Specify which file will compile to the executable
 add_executable(test_array ${PROJECT_SOURCE_DIR}/tests/Array/test_array.cpp)
-# Also add the two test library
+# Also add the test libraries
 add_library(array_initialization ${PROJECT_SOURCE_DIR}/tests/Array/initialization.cpp)
+add_library(array_consistancy ${PROJECT_SOURCE_DIR}/tests/Array/consistancy.cpp)
+add_library(array_resize ${PROJECT_SOURCE_DIR}/tests/Array/resize.cpp)
+add_library(array_push_erase ${PROJECT_SOURCE_DIR}/tests/Array/push_erase.cpp)
 
 # Add the generated hpp's to the include directories, plus the library directory
 target_include_directories(test_array PUBLIC "${INCLUDE_DIRS}")
 # Add the generated hpp's to the include directories, plus the library directory
 target_include_directories(array_initialization PUBLIC "${INCLUDE_DIRS}")
+target_include_directories(array_consistancy PUBLIC "${INCLUDE_DIRS}")
+target_include_directories(array_resize PUBLIC "${INCLUDE_DIRS}")
+target_include_directories(array_push_erase PUBLIC "${INCLUDE_DIRS}")
 
 # Add which libraries to link
 target_link_libraries(test_array PUBLIC
                       array_initialization
+                      array_consistancy
+                      array_resize
+                      array_push_erase
                       )
 
 
