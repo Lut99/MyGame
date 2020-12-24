@@ -22,6 +22,7 @@
 #include <array>
 
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/Debugger.hpp"
 #include "Application/MainWindow.hpp"
 #include "Tools/Array.hpp"
 #include "Debug/Debug.hpp"
@@ -183,6 +184,9 @@ int main() {
         // Just add the extensions, no validation layers
         Vulkan::Instance instance(global_extensions);
         #endif
+
+        // Initialize the debugger
+        Vulkan::Debugger debugger(instance);
 
         // Create a window with that instance
         MainWindow window(instance, "Hello Viking Room", 800, 600);

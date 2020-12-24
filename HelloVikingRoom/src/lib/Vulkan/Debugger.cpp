@@ -129,8 +129,8 @@ void Vulkan::Debugger::populate_messenger_info(VkDebugUtilsMessengerCreateInfoEX
     // Mark what our callback is (the one that utilizes our own debugger)
     debug_info->pfnUserCallback = Vulkan::Debugger::vk_callback;
 
-    // Optionally, provide a struct to pass to the callback
-    debug_info->pUserData = nullptr;
+    // Provide our own Debugger as user data
+    debug_info->pUserData = (void*) &Debug::debugger;
 
     DRETURN;
 }
