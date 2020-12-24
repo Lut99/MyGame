@@ -85,7 +85,7 @@ MainWindow::~MainWindow() {
     }
     if (this->vk_surface != nullptr) {
         // Destroy the surface
-        // vkDestroySurfaceKHR(this->instance, this->vk_surface, nullptr);
+        vkDestroySurfaceKHR(this->instance, this->vk_surface, nullptr);
     }
 
     DLEAVE;
