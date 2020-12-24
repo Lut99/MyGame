@@ -164,6 +164,9 @@ int main() {
     DLOG(auxillary, "<<<<< HELLO VIKINGROOM >>>>>");
     DLOG(auxillary, "");
 
+    // First, initialize the glfw library
+    glfwInit();
+
     // Wrap all code in a try/catch to neatly handle the errors that our DEBUGGER may throw
     try {
         // Get all the extensions for our window library
@@ -192,6 +195,9 @@ int main() {
     } catch (std::exception&) {
         DRETURN EXIT_FAILURE;
     }
+
+    // Destroy the GLFW library
+    glfwTerminate();
 
     DLOG(auxillary, "");
     DLOG(auxillary, "Done.");

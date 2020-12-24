@@ -33,42 +33,60 @@ MainWindow::MainWindow(const Vulkan::Instance& instance, const std::string& titl
     DENTER("MainWindow::MainWindow");
     DLOG(info, "Initializing window...");
 
-    // Initialize the GLFW3 library
-    glfwInit();
-
     // Next, tell the API that we'll create a non-OpenGL window. */
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
     // Next, create the window itself
-    this->window = glfwCreateWindow(this->width, this->height, this->title.c_str(), nullptr, nullptr);
-    if (this->window == nullptr) {
+    this->glfw_window = glfwCreateWindow(this->width, this->height, this->title.c_str(), nullptr, nullptr);
+    if (this->glfw_window == nullptr) {
         DLOG(fatal, "Could not initialize GLFW window");
     }
 
     // Register the resize callback for this window
-    glfwSetWindowUserPointer(this->window, (void*) this);
-    glfwSetFramebufferSizeCallback(this->window, MainWindow::GLFW_resize_callback);
+    glfwSetWindowUserPointer(this->glfw_window, (void*) this);
+    glfwSetFramebufferSizeCallback(this->glfw_window, MainWindow::GLFW_resize_callback);
 
+
+
+    // Move on to initializing the surface
+    DLOG(auxillary, "Initializing surface...");
+
+    // Simply call glfw's function
+    if (glfwCreateWindowSurface(this->instance, this->glfw_window, nullptr, &this->vk_surface) != VK_SUCCESS) {
+        DLOG(fatal, "Could not create window surface");
+    }
+
+    // Done!
     DLEAVE;
 }
 
 /* Move constructor for the MainWindow class. */
 MainWindow::MainWindow(MainWindow&& other) :
     instance(other.instance),
+    glfw_window(other.glfw_window),
+    vk_surface(other.vk_surface),
     title(other.title),
     width(other.width),
     height(other.height)
-{}
+{
+    // Set the other's surface etc to nullptr's
+    other.glfw_window = nullptr;
+    other.vk_surface = nullptr;
+}
 
 /* Destructor for the MainWindow class. */
 MainWindow::~MainWindow() {
     DENTER("MainWindow::~MainWindow");
     DLOG(info, "Cleaning MainWindow...");
 
-    // Destroy the wrapped window object
-    glfwDestroyWindow(this->window);
-    // Also terminate the GLFW library
-    glfwTerminate();
+    if (this->glfw_window != nullptr) {
+        // Destroy the wrapped window object
+        glfwDestroyWindow(this->glfw_window);
+    }
+    if (this->vk_surface != nullptr) {
+        // Destroy the surface
+        // vkDestroySurfaceKHR(this->instance, this->vk_surface, nullptr);
+    }
 
     DLEAVE;
 }

@@ -32,7 +32,9 @@ namespace HelloVikingRoom {
         /* The Vulkan instance that this window is based on. */
         const Vulkan::Instance& instance;
         /* The GLFW window object that this class wraps. */
-        GLFWwindow* window;
+        GLFWwindow* glfw_window;
+        /* The VkSurface object that this class also wraps. */
+        VkSurfaceKHR vk_surface;
 
         /* Indicates if the window recently resized or not. */
         bool did_resize;
@@ -61,12 +63,17 @@ namespace HelloVikingRoom {
         /* Runs the events for the internal window. */
         void do_events();
         /* Returns if the window is done with events or not. */
-        inline bool done() const { return (bool) glfwWindowShouldClose(this->window); }
+        inline bool done() const { return (bool) glfwWindowShouldClose(this->glfw_window); }
 
         /* Returns whether or not the window recently resized. */
         inline bool resized() const { return this->did_resize; }
         /* Resets the status of window resize back to false. */
         inline void reset_resized() { this->did_resize = false; }
+
+        /* Returns the internal window object, if necessary. */
+        inline GLFWwindow* const window() const { return this->glfw_window; }
+        /* Returns the internal surface object, if necessary. */
+        inline const VkSurfaceKHR surface() const { return this->vk_surface; }
 
     };
 }
