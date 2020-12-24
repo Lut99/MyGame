@@ -121,58 +121,51 @@ static bool test_c_array_initializer() {
     TESTCASE("C-style array constructor");
 
     // Try each type (both empty , one element and with more elements), with a success message
-    easy_t test1a_val[] = {};
     easy_t test1b_val[] = { rand() };
     easy_t test1c_val[] = { rand(), rand() };
-    Array<easy_t> test1a(test1a_val, 0);
+    Array<easy_t> test1a(nullptr, 0);
     Array<easy_t> test1b(test1b_val, 1);
     Array<easy_t> test1c(test1c_val, 2);
     cout << endl << "      Easy case success" << endl;
 
-    medium_t test2a_val[] = {};
     medium_t test2b_val[] = { medium_t(rand()) };
     medium_t test2c_val[] = { medium_t(rand()), medium_t(rand()) };
-    Array<medium_t> test2a(test2a_val, 0);
+    Array<medium_t> test2a(nullptr, 0);
     Array<medium_t> test2b(test2b_val, 1);
     Array<medium_t> test2c(test2c_val, 2);
     cout << "      Medium case success" << endl;
 
-    medium_hard_t test3a_val[] = {};
     medium_hard_t test3b_val[] = { medium_hard_t(medium_t(rand())) };
     medium_hard_t test3c_val[] = { medium_hard_t(medium_t(rand())), medium_hard_t(medium_t(rand())) };
-    Array<medium_hard_t> test3a(test3a_val, 0);
+    Array<medium_hard_t> test3a(nullptr, 0);
     Array<medium_hard_t> test3b(test3b_val, 1);
     Array<medium_hard_t> test3c(test3c_val, 2);
     cout << "      Medium hard case success" << endl;
 
-    hard_t test4a_val[] = {};
     hard_t test4b_val[] = { hard_t(rand()) };
     hard_t test4c_val[] = { hard_t(rand()), hard_t(rand()) };
-    Array<hard_t> test4a(test4a_val, 0);
+    Array<hard_t> test4a(nullptr, 0);
     Array<hard_t> test4b(test4b_val, 1);
     Array<hard_t> test4c(test4c_val, 2);
     cout << "      Hard case success" << endl;
 
-    super_hard_t test5a_val[] = {};
     super_hard_t test5b_val[] = { super_hard_t(hard_t(rand())) };
     super_hard_t test5c_val[] = { super_hard_t(hard_t(rand())), super_hard_t(hard_t(rand())) };
-    Array<super_hard_t> test5a(test5a_val, 0);
+    Array<super_hard_t> test5a(nullptr, 0);
     Array<super_hard_t> test5b(test5b_val, 1);
     Array<super_hard_t> test5c(test5c_val, 2);
     cout << "      Super hard case success" << endl;
 
-    extreme_t test6a_val[] = {};
     extreme_t test6b_val[] = { extreme_t(rand(), medium_t(rand())) };
     extreme_t test6c_val[] = { extreme_t(rand(), medium_t(rand())), extreme_t(rand(), medium_t(rand())) };
-    Array<extreme_t> test6a(test6a_val, 0);
+    Array<extreme_t> test6a(nullptr, 0);
     Array<extreme_t> test6b(test6b_val, 1);
     Array<extreme_t> test6c(test6c_val, 2);
     cout << "      Extreme case success" << endl;
 
-    super_extreme_t test7a_val[] = {};
     super_extreme_t test7b_val[] = { super_extreme_t(super_hard_t(hard_t(rand())), extreme_t(rand(), medium_t(rand()))) };
     super_extreme_t test7c_val[] = { super_extreme_t(super_hard_t(hard_t(rand())), extreme_t(rand(), medium_t(rand()))), super_extreme_t(super_hard_t(hard_t(rand())), extreme_t(rand(), medium_t(rand()))) };
-    Array<super_extreme_t> test7a(test7a_val, 0);
+    Array<super_extreme_t> test7a(nullptr, 0);
     Array<super_extreme_t> test7b(test7b_val, 1);
     Array<super_extreme_t> test7c(test7c_val, 2);
     cout << "      Super extreme case success" << endl;

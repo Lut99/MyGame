@@ -15,6 +15,9 @@
 #ifndef COMMON_HPP
 #define COMMON_HPP
 
+#include <string>
+#include <algorithm>
+
 /***** HELPER CLASSES *****/
 /* The easiest class; just stores a value. */
 template <class T>

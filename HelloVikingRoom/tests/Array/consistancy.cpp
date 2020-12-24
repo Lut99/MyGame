@@ -429,7 +429,7 @@ static bool test_altered() {
     Array<super_extreme_t> test7 = { super_extreme_t(super_hard_t(hard_t(1)), extreme_t(1, medium_t(1))), super_extreme_t(super_hard_t(hard_t(2)), extreme_t(2, medium_t(2))), super_extreme_t(super_hard_t(hard_t(3)), extreme_t(3, medium_t(3))) };
 
     // Alter them
-    for (size_t i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; i++) {
         test1[i] = i + 3;
         *test2[i] = i + 3;
         **test3[i] = i + 3;
@@ -516,7 +516,7 @@ static bool test_at_altered() {
     Array<super_extreme_t> test7 = { super_extreme_t(super_hard_t(hard_t(1)), extreme_t(1, medium_t(1))), super_extreme_t(super_hard_t(hard_t(2)), extreme_t(2, medium_t(2))), super_extreme_t(super_hard_t(hard_t(3)), extreme_t(3, medium_t(3))) };
 
     // Alter them
-    for (size_t i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; i++) {
         test1.at(i) = i + 3;
         *test2.at(i) = i + 3;
         **test3.at(i) = i + 3;

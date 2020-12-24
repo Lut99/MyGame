@@ -32,7 +32,7 @@ extern bool test_push_erase();
 
 int main() {
     // Seed the random seed
-    srand(time(0));
+    srand((unsigned int) time(0));
 
     if (!test_initialization()) {
         return EXIT_FAILURE;
