@@ -4,7 +4,7 @@
  * Created:
  *   12/22/2020, 4:59:25 PM
  * Last edited:
- *   12/23/2020, 5:33:00 PM
+ *   12/24/2020, 12:51:34 PM
  * Auto updated?
  *   Yes
  *
@@ -176,7 +176,7 @@ template <class T> void Array<T>::erase(size_t index) {
     }
 
     // Move all elements following it one back
-    memmove(this->elements + index, this->elements + index + 1, this->length - 1 - index);
+    memmove(this->elements + index, this->elements + index + 1, sizeof(T) * (this->length - 1 - index));
 
     // Decrease the length
     --this->length;
@@ -195,10 +195,10 @@ template <class T> void Array<T>::erase(size_t start_index, size_t stop_index) {
     }
 
     // Move all elements following it back
-    memmove(this->elements + start_index, this->elements + stop_index + 1, this->length - 1 - stop_index);
+    memmove(this->elements + start_index, this->elements + stop_index + 1, sizeof(T) * (this->length - 1 - stop_index));
 
     // Decrease the length
-    this->length -= stop_index - start_index;
+    this->length -= 1 + stop_index - start_index;
 }
 
 
