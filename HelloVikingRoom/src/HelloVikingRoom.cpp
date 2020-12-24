@@ -23,6 +23,7 @@
 
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Debugger.hpp"
+#include "Vulkan/Device.hpp"
 #include "Application/MainWindow.hpp"
 #include "Tools/Array.hpp"
 #include "Debug/Debug.hpp"
@@ -170,6 +171,7 @@ int main() {
 
     // Wrap all code in a try/catch to neatly handle the errors that our DEBUGGER may throw
     try {
+        /***** STEP 1: Initialization *****/
         // Get all the extensions for our window library
         Array<const char*> global_extensions = get_global_extensions();
         // Check if we can use them
@@ -191,11 +193,21 @@ int main() {
         // Create a window with that instance
         MainWindow window(instance, "Hello Viking Room", 800, 600);
 
-        // Run the main loop
+        // Create a Device instance
+        Vulkan::Device device(instance, window.surface(), device_extensions);
+
+
+
+
+
+        /***** STEP 2: MAIN LOOP *****/
         DLOG(info, "Running main loop...");
         while (!window.done()) {
             window.do_events();
         }
+
+
+
     } catch (std::exception&) {
         DRETURN EXIT_FAILURE;
     }

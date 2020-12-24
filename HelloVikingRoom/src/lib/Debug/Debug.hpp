@@ -191,9 +191,9 @@ namespace Debug {
     };
 
 
-    
-    /* Static instance of the debug class, used for debugging. */
-    static Debugger debugger;
+
+    /* Tell the compiler that there is an global debugger instance. */
+    extern Debugger debugger;
 };
 
 #endif

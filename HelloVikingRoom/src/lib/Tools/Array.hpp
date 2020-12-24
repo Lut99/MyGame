@@ -63,6 +63,8 @@ namespace Tools {
         void erase(size_t index);
         /* Erases multiple elements in the given (inclusive) range from the array. Does nothing if the any index is out-of-bounds or if the start_index is larger than the stop_index. */
         void erase(size_t start_index, size_t stop_index);
+        /* Erases everything from the array, even removing the internal allocated array. */
+        void clear();
 
         /* Re-allocates the internal array to the given size. Any leftover elements will be left unitialized, and elements that won't fit will be deallocated. */
         void reserve(size_t new_size);
@@ -82,6 +84,8 @@ namespace Tools {
         T* const wdata(size_t new_size = std::numeric_limits<size_t>::max());
         /* Returns a constant pointer to the internal data struct. Use this to read from the array using C-libraries, but beware that the array needs to have enough space reserved. */
         inline const T* const rdata() const { return this->elements; }
+        /* Returns true if there are no elements in this array, or false otherwise. */
+        inline bool empty() const { return this->length == 0; }
         /* Returns the number of elements stored in this Array. */
         inline size_t size() const { return this->length; }
         /* Returns the number of elements this Array can store before resizing. */

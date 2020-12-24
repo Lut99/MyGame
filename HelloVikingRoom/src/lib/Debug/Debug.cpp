@@ -24,6 +24,14 @@
 using namespace Debug;
 
 
+/***** GLOBALS *****/
+/* Global instance of the debug class, used for debugging. */
+Debugger Debug::debugger;
+
+
+
+
+
 /***** DEBUGGER CLASS *****/
 /* Default constructor for the Debugger class. */
 Debugger::Debugger() {}
@@ -38,11 +46,11 @@ void Debugger::print_linewrapped(std::ostream& os, size_t& x, size_t width, cons
     bool ignoring = false;
     for (size_t i = 0; i < message.size(); i++) {
         // If we're seeing a '\033', ignore until an 'm' is reached
-        if (ignoring && message[i] == '\033') { ignoring = true; }
-        else if (!ignoring && message[i] == 'm') { ignoring = false; }
+        if (!ignoring && message[i] == '\033') { ignoring = true; }
+        else if (ignoring && message[i] == 'm') { ignoring = false; }
 
         // Otherwise, check if we should print a newline (only when we're not printing color codes)
-        if (ignoring && ++x >= width) {
+        if (!ignoring && ++x >= width) {
             os << std::endl << prefix;
             x = 0;
         }
@@ -214,8 +222,11 @@ void Debugger::pop() {
     // Acquire the lock for this function
     std::unique_lock<std::mutex> pop_lock(this->lock);
 
-    // Pop the vector
-    this->stack.pop_back();
+    // Only pop if there are elements left
+    if (this->stack.size() > 0) {
+        // Pop the vector
+        this->stack.pop_back();
+    }
 }
 
 

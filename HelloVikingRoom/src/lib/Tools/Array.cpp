@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <type_traits>
 #include <cstring>
+#include <algorithm>
 
 #include "Tools/Array.hpp"
 
@@ -199,6 +200,22 @@ template <class T> void Array<T>::erase(size_t start_index, size_t stop_index) {
 
     // Decrease the length
     this->length -= 1 + stop_index - start_index;
+}
+
+/* Erases everything from the array, even removing the internal allocated array. */
+template <class T> void Array<T>::clear() {
+    // Delete everything currently in the array if needed
+    if (std::is_destructible<T>::value) {
+        for (size_t i = 0; i < this->length; i++) {
+            this->elements[i].~T();
+        }
+    }
+    free(this->elements);
+
+    // Set the new values
+    this->elements = nullptr;
+    this->length = 0;
+    this->max_length = 0;
 }
 
 
