@@ -4,7 +4,7 @@
  * Created:
  *   19/12/2020, 16:23:17
  * Last edited:
- *   19/12/2020, 16:23:17
+ *   12/24/2020, 1:05:12 PM
  * Auto updated?
  *   Yes
  *
@@ -23,6 +23,7 @@
 
 #include "Vulkan/Instance.hpp"
 #include "Application/MainWindow.hpp"
+#include "Tools/Array.hpp"
 #include "Debug/Debug.hpp"
 
 using namespace std;
@@ -33,12 +34,12 @@ using namespace Debug::SeverityValues;
 
 /***** CONSTANTS *****/
 /* List of device extensions that we want to be enabled. */
-const std::array<const char*, 1> device_extensions = {
+const Array<const char*> device_extensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 /* List of validation layers that we want to be enabled. */
-const char* required_layers[] = {
-    "VK_LAYER_KHRONOS_validation", "VK_LAYER_LUNARG_monitor"
+const  Array<const char*> required_layers = {
+    "VK_LAYER_KHRONOS_validation"
 };
 
 
@@ -79,7 +80,7 @@ void verify_global_extensions(const Array<const char*>& to_verify) {
         DLOG(fatal, "Could not get number of supported extensions.");
     }
     Array<VkExtensionProperties> existing_extensions(n_existing_extensions);
-    if (vkEnumerateInstanceExtensionProperties(nullptr, &n_existing_extensions, existing_extensions.data()) != VK_SUCCESS) {
+    if (vkEnumerateInstanceExtensionProperties(nullptr, &n_existing_extensions, existing_extensions.wdata(n_existing_extensions)) != VK_SUCCESS) {
         DLOG(fatal, "Could not get list of supported extensions.");
     }
 
@@ -121,7 +122,7 @@ Array<const char*> trim_layers(const Array<const char*>& to_trim) {
         DLOG(fatal, "Could not get number of supported layers.");
     }
     Array<VkLayerProperties> existing_layers(n_existing_layers);
-    if (vkEnumerateInstanceLayerProperties(&n_existing_layers, existing_layers.data()) != VK_SUCCESS) {
+    if (vkEnumerateInstanceLayerProperties(&n_existing_layers, existing_layers.wdata(n_existing_layers)) != VK_SUCCESS) {
         DLOG(fatal, "Could not get list of supported layers.");
     }
 

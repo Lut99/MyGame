@@ -4,7 +4,7 @@
  * Created:
  *   21/12/2020, 13:35:55
  * Last edited:
- *   21/12/2020, 13:35:55
+ *   12/24/2020, 12:56:59 PM
  * Auto updated?
  *   Yes
  *
@@ -76,7 +76,7 @@ Vulkan::Instance::Instance(const Tools::Array<const char*>& required_extensions)
     instance_info.pApplicationInfo = &app_info;
     // Tell vulkan which extenions to enable
     instance_info.enabledExtensionCount = static_cast<uint32_t>(required_extensions.size());
-    instance_info.ppEnabledExtensionNames = required_extensions.data();
+    instance_info.ppEnabledExtensionNames = required_extensions.rdata();
     // Tell Vulkan we enable no layers
     instance_info.enabledLayerCount = 0;
     instance_info.ppEnabledLayerNames = nullptr;
@@ -108,7 +108,7 @@ Vulkan::Instance::Instance(const Tools::Array<const char*>& required_extensions,
     instance_info.pApplicationInfo = &app_info;
     // Tell vulkan which extenions to enable
     instance_info.enabledExtensionCount = static_cast<uint32_t>(required_extensions.size());
-    instance_info.ppEnabledExtensionNames = required_extensions.data();
+    instance_info.ppEnabledExtensionNames = required_extensions.rdata();
     // Tell Vulkan we want to enable our chosen layers
     instance_info.enabledLayerCount = n_local_required_layers;//static_cast<uint32_t>(required_layers.size());;
     instance_info.ppEnabledLayerNames = local_required_layers;//required_layers.data();

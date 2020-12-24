@@ -4,7 +4,7 @@
  * Created:
  *   21/12/2020, 13:02:31
  * Last edited:
- *   21/12/2020, 13:02:31
+ *   12/24/2020, 12:58:22 PM
  * Auto updated?
  *   Yes
  *
@@ -41,6 +41,9 @@ MainWindow::MainWindow(const Vulkan::Instance& instance, const std::string& titl
 
     // Next, create the window itself
     this->window = glfwCreateWindow(this->width, this->height, this->title.c_str(), nullptr, nullptr);
+    if (this->window == nullptr) {
+        DLOG(fatal, "Could not initialize GLFW window");
+    }
 
     // Register the resize callback for this window
     glfwSetWindowUserPointer(this->window, (void*) this);

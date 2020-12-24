@@ -4,7 +4,7 @@
  * Created:
  *   19/12/2020, 16:32:58
  * Last edited:
- *   19/12/2020, 16:32:58
+ *   12/24/2020, 1:01:28 PM
  * Auto updated?
  *   Yes
  *
@@ -37,7 +37,7 @@
 #ifndef NDEBUG
 /***** MACROS WHEN DEBUGGING IS ENABLED *****/
 
-/* Wraps any function call, registring it on the debugger's stacktrace. */
+/* Registers given function on the debugger's stacktrace. */
 #define DENTER(FUNC_NAME) \
     Debug::debugger.push((FUNC_NAME), (__FILE__), (__LINE__) - 1);
 /* Pops the current frame from the stack only, but does not call return. */
@@ -75,7 +75,7 @@
 #else
 /***** MACROS WHEN DEBUGGING IS DISABLED *****/
 
-/* Wraps any function call, registring it on the debugger's stacktrace. */
+/* Registers given function on the debugger's stacktrace. */
 #define DENTER(FUNC_NAME)
 /* Pops the current frame from the stack only, but does not call return. */
 #define DLEAVE
