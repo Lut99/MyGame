@@ -32,7 +32,7 @@
 /* Swaps the foreground and background colours. */
 #define REVERSED "\033[7m"
 /* Reset colour */
-#define TEXT "\033[0m"
+#define RESET "\033[0m"
 
 #ifndef NDEBUG
 /***** MACROS WHEN DEBUGGING IS ENABLED *****/
@@ -105,16 +105,6 @@
 namespace Debug {
     /* The maximum linewidth before the debugger breaks lines. */
     static const size_t max_line_width = 100;
-    /* The string that will be appended before all auxillary messages. */
-    static const std::string auxillary_msg = "       ";
-    /* The string that will be appended before all info messages. */
-    static const std::string info_msg = "[" GREEN " OK " TEXT "] ";
-    /* The string that will be appended before all warning messages. */
-    static const std::string warning_msg = "[" YELLOW "WARN" TEXT "] ";
-    /* The string that will be appended before all error messages. */
-    static const std::string nonfatal_msg = "[" RED "FAIL" TEXT "] ";
-    /* The string that will be appended before all error messages. */
-    static const std::string fatal_msg = "[" RED REVERSED "FAIL" TEXT "] ";
 
 
 
@@ -154,6 +144,21 @@ namespace Debug {
         std::vector<Frame> stack;
         /* List of currently muted functions. */
         std::vector<std::string> muted;
+
+        /* Flags if the current terminal supports color codes. */
+        bool colour_enabled;
+        /* The string that will be appended before all auxillary messages. */
+        const std::string auxillary_msg;
+        /* The string that will be appended before all info messages. */
+        const std::string info_msg;
+        /* The string that will be appended before all warning messages. */
+        const std::string warning_msg;
+        /* The string that will be appended before all error messages. */
+        const std::string nonfatal_msg;
+        /* The string that will be appended before all error messages. */
+        const std::string fatal_msg;
+        /* The string that will be appended to reset all colours. */
+        const std::string reset_msg;
 
         /* The current number of indents specified. */
         size_t indent_level;

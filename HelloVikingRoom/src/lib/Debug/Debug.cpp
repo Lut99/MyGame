@@ -18,6 +18,9 @@
 
 #include <algorithm>
 #include <stdexcept>
+#ifdef _WIN32
+#include "windows.h"
+#endif
 
 #include "Debug.hpp"
 
@@ -32,9 +35,36 @@ Debugger Debug::debugger;
 
 
 
+/***** HELPER FUNCTIONS *****/
+/* Returns whether or not the associated terminal supports ANSI color codes. */
+static bool terminal_supports_colours() {
+    #ifdef _WIN32
+    // For Windows, we check
+    DWORD modes;
+    GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &modes);
+    return modes & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+
+    #else
+    // Let's assume the rest does
+    return true;
+    #endif
+}
+
+
+
+
+
 /***** DEBUGGER CLASS *****/
 /* Default constructor for the Debugger class. */
-Debugger::Debugger() {}
+Debugger::Debugger() :
+    colour_enabled(terminal_supports_colours()),
+    auxillary_msg("       "),
+    info_msg(this->colour_enabled ? "[" GREEN " OK " RESET "] " : "[ OK ] "),
+    warning_msg(this->colour_enabled ? "[" YELLOW "WARN" RESET "] " : "[WARN] "),
+    nonfatal_msg(this->colour_enabled ? "[" RED "FAIL" RESET "] " : "[FAIL] "),
+    fatal_msg(this->colour_enabled ? "[" RED REVERSED "ERRR" RESET "] " : "[ERRR] "),
+    reset_msg(this->colour_enabled ? RESET : "")
+{}
 
 
 
@@ -87,7 +117,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                 size_t width = max_line_width - 7 - this->indent_level * 7;
                 os << std::string(this->indent_level * 7, ' ') << auxillary_msg;
                 this->print_linewrapped(os, x, width, message);
-                os << TEXT << std::endl;
+                os << reset_msg << std::endl;
                 return;
             }
 
@@ -109,7 +139,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                 size_t width = max_line_width - 7 - this->indent_level * 7;
                 os << std::string(this->indent_level * 7, ' ') << info_msg;
                 this->print_linewrapped(os, x, width, message);
-                os << TEXT << std::endl;
+                os << reset_msg << std::endl;
                 return;
             }
 
@@ -131,7 +161,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                 size_t width = max_line_width - 7 - this->indent_level * 7;
                 os << std::string(this->indent_level * 7, ' ') << warning_msg;
                 this->print_linewrapped(os, x, width, message);
-                os << TEXT << std::endl;
+                os << reset_msg << std::endl;
 
                 // If there is a stack, display the stack message
                 if (this->stack.size() > 0) {
@@ -140,7 +170,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                     os << std::string(7 + this->indent_level * 7, ' ');
                     x = 0;
                     this->print_linewrapped(os, x, width, to_print);
-                    os << TEXT << std::endl;
+                    os << reset_msg << std::endl;
                 }
 
                 return;
@@ -153,7 +183,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                 size_t width = max_line_width - 7;
                 os << nonfatal_msg;
                 this->print_linewrapped(os, x, width, message);
-                os << TEXT << std::endl;
+                os << reset_msg << std::endl;
 
                 // Print a stacktrace, if any
                 if (this->stack.size() > 0) {
@@ -163,7 +193,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                         Frame f = this->stack[this->stack.size() - 1 - i];
                         std::string prefix = i == 0 ? "in" : "from";
                         this->print_linewrapped(os, x, width, "       " + prefix + " function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m");
-                        os << TEXT << std::endl;
+                        os << reset_msg << std::endl;
                     }
                     os << std::endl;
                 }
@@ -178,7 +208,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                 size_t width = max_line_width - 7;
                 os << fatal_msg;
                 this->print_linewrapped(os, x, width, message);
-                os << TEXT << std::endl;
+                os << reset_msg << std::endl;
 
                 // Print a stacktrace, if any
                 if (this->stack.size() > 0) {
@@ -188,7 +218,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                         Frame f = this->stack[this->stack.size() - 1 - i];
                         std::string prefix = i == 0 ? "in" : "from";
                         this->print_linewrapped(os, x, width, "       " + prefix + " function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m");
-                        os << TEXT << std::endl;
+                        os << reset_msg << std::endl;
                     }
                     os << std::endl;
                 }
