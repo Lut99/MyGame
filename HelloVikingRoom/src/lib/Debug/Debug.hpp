@@ -94,9 +94,13 @@
 #define DDEDENT
 
 /* Logs using the debugger. */
-#define DLOG(SEVERITY, MESSAGE)
+#define DLOG(SEVERITY, MESSAGE) \
+    if ((SEVERITY) == Severity::nonfatal) { std::cerr << (MESSAGE) << std::endl; } \
+    else if ((SEVERITY) == Severity::fatal) { throw std::runtime_error((MESSAGE)); }
 /* Logs using the debugger with extra indent. */
-#define DLOGi(SEVERITY, MESSAGE, INDENT)
+#define DLOGi(SEVERITY, MESSAGE, INDENT) \
+    if ((SEVERITY) == Severity::nonfatal) { std::cerr << (MESSAGE) << std::endl; } \
+    else if ((SEVERITY) == Severity::fatal) { throw std::runtime_error((MESSAGE)); }
 
 #endif
 
