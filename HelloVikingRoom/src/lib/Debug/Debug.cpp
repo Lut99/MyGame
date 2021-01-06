@@ -2,52 +2,59 @@
  *   by Lut99
  *
  * Created:
- *   19/12/2020, 16:32:34
+ *   06/01/2021, 13:58:22
  * Last edited:
- *   19/12/2020, 16:32:34
+ *   06/01/2021, 13:58:22
  * Auto updated?
  *   Yes
  *
  * Description:
- *   This file contains a more advanced method of debugging, where we can
- *   specify the debugging type and where its timestamp is noted.
- *   Aditionally, lines are automatically linewrapped (with correct
- *   indents), and extra indentation levels can be given based on functions
- *   entered or left.
+ *   Second take at writing a useful debugger. This one allows functions to
+ *   define tasks, which should streamline formatting in a very good way.
 **/
 
-#include <algorithm>
+#include <sstream>
 #include <stdexcept>
 #ifdef _WIN32
-#include "windows.h"
+#include <windows.h>
 #endif
 
 #include "Debug.hpp"
 
+using namespace std;
 using namespace Debug;
+using namespace Debug::SeverityValues;
 
 
 /***** GLOBALS *****/
-/* Global instance of the debug class, used for debugging. */
+#ifndef NDEBUG
+/* Debugging instance that is shared across all files. */
 Debugger Debug::debugger;
+#endif
 
 
 
 
 
-/***** HELPER FUNCTIONS *****/
-/* Returns whether or not the associated terminal supports ANSI color codes. */
-static bool terminal_supports_colours() {
-    #ifdef _WIN32
-    // For Windows, we check
-    DWORD modes;
-    GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &modes);
-    return modes & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+/***** TASK CLASS *****/
+/* Constructor for the Task class, which also computes the lines to print. */
+Task::Task(const std::string& name, const std::string& message) :
+    name(name),
+    n_lines(1)
+{
+    // Loop to find the message
+    size_t max_width = Debugger::line_width - Debugger::prefix_size;
+    std::stringstream sstr;
+    for (size_t i = 0; i < message.size(); i++) {
+        if (i < message.size() - 1 && i % max_width == max_width - 1) {
+            sstr << endl << string(Debugger::prefix_size, ' ');
+            ++this->n_lines;
+        }
+        sstr << message[i];
+    }
 
-    #else
-    // Let's assume the rest does
-    return true;
-    #endif
+    // Store it
+    this->message = sstr.str();
 }
 
 
@@ -55,23 +62,30 @@ static bool terminal_supports_colours() {
 
 
 /***** DEBUGGER CLASS *****/
-/* Default constructor for the Debugger class. */
-Debugger::Debugger() :
-    colour_enabled(terminal_supports_colours()),
-    auxillary_msg("       "),
-    info_msg(this->colour_enabled ? "[" GREEN " OK " RESET "] " : "[ OK ] "),
-    warning_msg(this->colour_enabled ? "[" YELLOW "WARN" RESET "] " : "[WARN] "),
-    nonfatal_msg(this->colour_enabled ? "[" RED "FAIL" RESET "] " : "[FAIL] "),
-    fatal_msg(this->colour_enabled ? "[" RED REVERSED "ERRR" RESET "] " : "[ERRR] "),
-    reset_msg(this->colour_enabled ? RESET : "")
-{}
+/* Default constructor for the Debugger class. Optionally overrides the initial thread safety feature. */
+Debugger::Debugger(bool multithreaded) :
+    used_multithreaded(multithreaded),
+    first_thread(this_thread::get_id())
+{
+    // Find out if we support colours
+    #ifdef _WIN32
+    // For Windows, we check
+    DWORD modes;
+    GetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), &modes);
+    this->ansi_support = modes & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    #else
+    // Let's assume the rest does
+    this->ansi_support = true;
+    #endif
+}
 
 
 
 /* Prints a given string over multiple lines, pasting n spaces in front of each one and linewrapping on the target width. Optionally, a starting x can be specified. */
-void Debugger::print_linewrapped(std::ostream& os, size_t& x, size_t width, const std::string& message) {
+void Debugger::_print_linewrapped(size_t& x, size_t indent, const std::string& message) {
     // Get the string to be pasted in front of every new line
-    std::string prefix = std::string(7 + this->indent_level * 7, ' ');
+    size_t prefix_size = Debugger::prefix_size + Debugger::indent_size * indent;
+    std::string prefix = std::string(prefix_size, ' ');
     // Loop to print each character
     bool ignoring = false;
     for (size_t i = 0; i < message.size(); i++) {
@@ -80,242 +94,119 @@ void Debugger::print_linewrapped(std::ostream& os, size_t& x, size_t width, cons
         else if (ignoring && message[i] == 'm') { ignoring = false; }
 
         // Otherwise, check if we should print a newline (only when we're not printing color codes)
-        if (!ignoring && ++x >= width) {
-            os << std::endl << prefix;
+        if (!ignoring && ++x >= Debugger::line_width - prefix_size) {
+            Debugger::os << std::endl << prefix;
             x = 0;
         }
 
         // Print the character itself
-        os << message[i];
+        Debugger::os << message[i];
     }
 }
 
-/* Actually prints the message to the given output stream. */
-void Debugger::_log(std::ostream& os, Severity severity, const std::string& message, size_t extra_indent) {
-    using namespace SeverityValues;
+/* Clears the lines of the currently busy tasks. */
+void Debugger::_clear() {
+    // For all tasks, remove the required number of lines
+}
 
-    // Acquire the lock for this function
-    std::unique_lock<std::mutex> _log_lock(this->lock);
+/* Writes the lines of the currently busy tasks. */
+void Debugger::_write() {
 
-    // Determine the type of message to preprend to signify how it went
-    switch(severity) {
-        case auxillary:
-            // Print as a prefix; i.e., a plain message with correct indents
-            {
-                // If this function is actually muted and we have a stack, do not display the message
-                if (this->stack.size() > 0) {
-                    for (size_t i = 0; i < this->muted.size(); i++) {
-                        if (this->muted[i] == this->stack[this->stack.size() - 1].func_name) {
-                            // Do not do anything
-                            return;
-                        }
-                    }
-                }
-
-                // Otherwise, we're clear to print the message
-                size_t x = 0;
-                size_t width = max_line_width - 7 - this->indent_level * 7;
-                os << std::string(this->indent_level * 7, ' ') << auxillary_msg;
-                this->print_linewrapped(os, x, width, message);
-                os << reset_msg << std::endl;
-                return;
-            }
-
-        case info:
-            // Print as info; pretty much the same, except that we now prepent with the info message
-            {
-                // If this function is actually muted and we have a stack, do not display the message
-                if (this->stack.size() > 0) {
-                    for (size_t i = 0; i < this->muted.size(); i++) {
-                        if (this->muted[i] == this->stack[this->stack.size() - 1].func_name) {
-                            // Do not do anything
-                            return;
-                        }
-                    }
-                }
-
-                // Otherwise, we're clear to print the message
-                size_t x = 0;
-                size_t width = max_line_width - 7 - this->indent_level * 7;
-                os << std::string(this->indent_level * 7, ' ') << info_msg;
-                this->print_linewrapped(os, x, width, message);
-                os << reset_msg << std::endl;
-                return;
-            }
-
-        case warning:
-            // Print as warning; the same as info with a different prexif, plus we print the origin of the line
-            {
-                // If this function is actually muted and we have a stack, do not display the message
-                if (this->stack.size() > 0) {
-                    for (size_t i = 0; i < this->muted.size(); i++) {
-                        if (this->muted[i] == this->stack[this->stack.size() - 1].func_name) {
-                            // Do not do anything
-                            return;
-                        }
-                    }
-                }
-
-                // Print the new message as normal
-                size_t x = 0;
-                size_t width = max_line_width - 7 - this->indent_level * 7;
-                os << std::string(this->indent_level * 7, ' ') << warning_msg;
-                this->print_linewrapped(os, x, width, message);
-                os << reset_msg << std::endl;
-
-                // If there is a stack, display the stack message
-                if (this->stack.size() > 0) {
-                    Frame f = this->stack[this->stack.size() - 1];
-                    std::string to_print = "[in function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m]";
-                    os << std::string(7 + this->indent_level * 7, ' ');
-                    x = 0;
-                    this->print_linewrapped(os, x, width, to_print);
-                    os << reset_msg << std::endl;
-                }
-
-                return;
-            }
-
-        case nonfatal:
-            // Print as nonfatal error; add some extra spacing around the message, and provide the full stacktrace
-            {
-                size_t x = 0;
-                size_t width = max_line_width - 7;
-                os << nonfatal_msg;
-                this->print_linewrapped(os, x, width, message);
-                os << reset_msg << std::endl;
-
-                // Print a stacktrace, if any
-                if (this->stack.size() > 0) {
-                    os << "       \033[1mStacktrace:\033[0m" << std::endl;
-                    for (size_t i = 0; i < this->stack.size(); i++) {
-                        x = 0;
-                        Frame f = this->stack[this->stack.size() - 1 - i];
-                        std::string prefix = i == 0 ? "in" : "from";
-                        this->print_linewrapped(os, x, width, "       " + prefix + " function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m");
-                        os << reset_msg << std::endl;
-                    }
-                    os << std::endl;
-                }
-
-                return;
-            }
-
-        case fatal:
-            // Print as fatal error; add some extra spacing around the message, provide the full stacktrace, then throw the error
-            {
-                size_t x = 0;
-                size_t width = max_line_width - 7;
-                os << fatal_msg;
-                this->print_linewrapped(os, x, width, message);
-                os << reset_msg << std::endl;
-
-                // Print a stacktrace, if any
-                if (this->stack.size() > 0) {
-                    os << "       \033[1mStacktrace:\033[0m" << std::endl;
-                    for (size_t i = 0; i < this->stack.size(); i++) {
-                        x = 0;
-                        Frame f = this->stack[this->stack.size() - 1 - i];
-                        std::string prefix = i == 0 ? "in" : "from";
-                        this->print_linewrapped(os, x, width, "       " + prefix + " function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m");
-                        os << reset_msg << std::endl;
-                    }
-                    os << std::endl;
-                }
-
-                // Return by throwing
-                throw std::runtime_error(message);
-            }
-
-        default:
-            // Let's re-do as auxillary
-            this->_log(os, auxillary, message, extra_indent);
-    }
 }
 
 
 
 /* Enters a new function, popping it's value on the stack. */
 void Debugger::push(const std::string& function_name, const std::string& file_name, size_t line_number) {
-    // Acquire the lock for this function
-    std::unique_lock<std::mutex> push_lock(this->lock);
-
     // Create a new stack frame
     Frame frame({ function_name, file_name, line_number });
 
     // Push it on the stack
-    this->stack.push_back(frame);
+    this->call_stack.at(this_thread::get_id()).push_back(frame);
 }
 
 /* pops the top function name of the stack. */
 void Debugger::pop() {
-    // Acquire the lock for this function
-    std::unique_lock<std::mutex> pop_lock(this->lock);
-
     // Only pop if there are elements left
-    if (this->stack.size() > 0) {
-        // Pop the vector
-        this->stack.pop_back();
+    std::vector<Frame>& call_stack = this->call_stack.at(this_thread::get_id());
+    if (call_stack.size() > 0) {
+        call_stack.pop_back();
     }
 }
 
 
 
-/* Mutes a given function. All info-level severity messages that are called from it or from children functions are ignored. */
-void Debugger::mute(const std::string& function_name) {
-    // Acquire the lock for this function
-    std::unique_lock<std::mutex> mute_lock(this->lock);
-
-    // Add the given function to the vector of muted functions
-    this->muted.push_back(function_name);
+/* Logs a message to stdout. The type of message must be specified, which also determines how the message will be printed. If the the severity is fatal, also throws a std::runtime_error with the same text. To disable that, use Severity::nonfatal otherwise. Finally, one can optionally specify extra levels of indentation to use for this message. */
+void Debugger::log(Severity severity, const std::string& message) {
+    
 }
 
-/* Unmutes a given function. All info-level severity messages that are called from it or from children functions are ignored. */
-void Debugger::unmute(const std::string& function_name) {
-    // Acquire the lock for this function
-    std::unique_lock<std::mutex> unmute_lock(this->lock);
 
-    // Try to find the function name
-    for (std::vector<std::string>::iterator iter = this->muted.begin(); iter != this->muted.end(); ++iter) {
-        if (*iter == function_name) {
-            // Found it; remove it and we're done
-            this->muted.erase(iter);
+
+/* Initializes a new task. Note that if there are already tasks on the stack, then this task is considered a subtask of the previous one. */
+void Debugger::start_task(const std::string& task_name, const std::string& task_message) {
+    // Check if the task already exists
+    vector<Task>& tasks = this->tasks.at(this_thread::get_id());
+    for (size_t i = 0; i < tasks.size(); i++) {
+        if (tasks[i].name == task_name) {
+            throw std::runtime_error("META ERROR: Duplicate task '" + task_name + "' specified.");
+        }
+    }
+
+    // Add it if not
+    this->_clear();
+    tasks.push_back(Task({ task_name, task_message }));
+    this->_write();
+}
+
+/* Finalizes an existing task as if it were successfull. Any tasks consider subtasks of this one will be closed with the same status. */
+void Debugger::end_task(const std::string& task_name) {
+    // Check if the task actually exists
+    vector<Task>& tasks = this->tasks.at(this_thread::get_id());
+    for (vector<Task>::const_iterator iter = tasks.begin(); iter != tasks.end(); ++iter) {
+        if ((*iter).name == task_name) {
+            // Update the terminal that it is done
+            this->_clear();
+            if (this->ansi_support) {
+                Debugger::os << "[" SUCCESS_MAKEUP "SUCCESS" RESET_MAKEUP "] ";
+            } else {
+                Debugger::os << "[SUCCESS] ";
+            }
+            (*iter).print_message(Debugger::os);
+
+            // Remove the task, then write them
+            tasks.erase(iter);
+            this->_write();
             return;
         }
     }
 
-    // Not found, so nothing to remove
-    return;
+    // Otherwise, not found
+    throw std::runtime_error("META ERROR: Cannot stop non-existent task '" + task_name + "'.");
 }
 
+/* Finalizes an existing task as if it failed. Any tasks consider subtasks of this one will be closed with the same status. */
+void Debugger::fail_task(const std::string& task_name) {
+    // Check if the task actually exists
+    vector<Task>& tasks = this->tasks.at(this_thread::get_id());
+    for (vector<Task>::const_iterator iter = tasks.begin(); iter != tasks.end(); ++iter) {
+        if ((*iter).name == task_name) {
+            // Update the terminal that it is done
+            this->_clear();
+            if (this->ansi_support) {
+                Debugger::os << "[" FAILURE_MAKEUP "FAILURE" RESET_MAKEUP "] ";
+            } else {
+                Debugger::os << "[FAILURE] ";
+            }
+            (*iter).print_message(Debugger::os);
 
-
-/* Increases indents. Useful for when a helper function is called, for example. */
-void Debugger::indent() {
-    // Acquire the lock for this function
-    std::unique_lock<std::mutex> indent_lock(this->lock);
-
-    // Simply add one to the value
-    ++this->indent_level; 
-}
-
-/* Decreases indents. */
-void Debugger::dedent() {
-    // Acquire the lock for this function
-    std::unique_lock<std::mutex> dedent_lock(this->lock);
-
-    // Subtract one from the value, but make sure it's bounded to not go below zero and overflow
-    this->indent_level = (this->indent_level > 0 ? this->indent_level - 1 : 0); 
-}
-
-
-
-/* Logs a message to the debugger. The type of message must be specified, which also determines how the message will be printed. If the the severity is fatal, also throws a std::runtime_error with the same text. To disable that, use Severity::nonfatal otherwise. Finally, one can optionally specify extra levels of indentation to use for this message. */
-void Debugger::log(Severity severity, const std::string& message, size_t extra_indent) {
-    // Write to the correct stream based on the severity
-    if (severity == Severity::info || severity == Severity::auxillary) {
-        this->_log(std::cout, severity, message, extra_indent);
-    } else {
-        this->_log(std::cerr, severity, message, extra_indent);
+            // Remove the task, then write them
+            tasks.erase(iter);
+            this->_write();
+            return;
+        }
     }
+
+    // Otherwise, not found
+    throw std::runtime_error("META ERROR: Cannot fail non-existent task '" + task_name + "'.");
 }
