@@ -178,14 +178,14 @@ Device::Device(const Instance& instance, const VkSurfaceKHR& surface, const Arra
 
 /* Move constructor for the Device class. */
 Device::Device(Device&& other) :
-    instance(other.instance),
     vk_physical_device(other.vk_physical_device),
     vk_device(other.vk_device),
     queue_info(other.queue_info),
     swapchain_info(other.swapchain_info),
     vk_graphics_queue(other.vk_graphics_queue),
     vk_presentation_queue(other.vk_presentation_queue),
-    gpu_name(other.gpu_name)
+    gpu_name(other.gpu_name),
+    instance(other.instance)
 {
     // Set the relevant vulkan structs to nullptr's in the other instance
     other.vk_device = nullptr;

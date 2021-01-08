@@ -67,7 +67,7 @@ namespace HelloVikingRoom::Vulkan {
         DeviceSwapchainInfo(const VkPhysicalDevice& physical_device, const VkSurfaceKHR& surface);
 
         /* Returns the capabilities of the device's swapchain as a VkSurfaceCapabilitiesKHR struct. */
-        inline VkSurfaceCapabilitiesKHR capabalities() const { return this->swapchain_capabalities; }
+        inline const VkSurfaceCapabilitiesKHR& capabalities() const { return this->swapchain_capabalities; }
         /* Returns the formats supported by the device's swapchain as an array of VkSurfaceFormatKHR structs. */
         inline const Array<VkSurfaceFormatKHR>& formats() const { return this->swapchain_formats; }
         /* Returns the present modes supported by the device's swapchain as an array of VkSurfacVkPresentModeKHReFormatKHR structs. */
@@ -79,8 +79,6 @@ namespace HelloVikingRoom::Vulkan {
     /* The Device class wraps a VkDevice, automatically selecting a suitable physical device to use. */
     class Device {
     private:
-        /* The Vulkan instance we wrap. */
-        const Instance& instance;
         /* The VkPhysicalDevice we selected. */
         VkPhysicalDevice vk_physical_device;
         /* The VkDevice that wraps the physical device. */
@@ -99,6 +97,10 @@ namespace HelloVikingRoom::Vulkan {
         std::string gpu_name;
 
     public:
+        /* The Vulkan instance we wrap. */
+        const Instance& instance;
+
+        
         /* Constructor for the Device class, which takes a Vulkan Instance to bind the chosen GPU to, a VkSurfaceKHR struct to check if GPUs can present to our surface and a list of extensions the device should support. */
         Device(const Instance& instance, const VkSurfaceKHR& surface, const Array<const char*>& device_extensions);
         /* Copy constructor for the Device class, which is deleted, since we work with handles. */
@@ -124,6 +126,11 @@ namespace HelloVikingRoom::Vulkan {
         inline const VkQueue& graphics_queue() const { return this->vk_graphics_queue; }
         /* Returns the handle for the presentation queue of the GPU. */
         inline const VkQueue& presentation_queue() const { return this->vk_presentation_queue; }
+
+        /* Returns a constant reference to the queue information of this device. */
+        inline const DeviceQueueInfo& get_queue_info() const { return *this->queue_info; }
+        /* Returns a constant reference to the swapchain information of this device. */
+        inline const DeviceSwapchainInfo& get_swapchain_info() const { return *this->swapchain_info; }
 
         /* Explicity retrieves the internal VkPhysicalDevice instance. */
         inline const VkPhysicalDevice& physical_device() const { return this->vk_physical_device; }

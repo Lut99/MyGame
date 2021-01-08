@@ -70,10 +70,14 @@ namespace HelloVikingRoom {
         /* Resets the status of window resize back to false. */
         inline void reset_resized() { this->did_resize = false; }
 
-        /* Returns the internal window object, if necessary. */
+        /* Explicitly returns the internal window object, if necessary. */
         inline GLFWwindow* const window() const { return this->glfw_window; }
-        /* Returns the internal surface object, if necessary. */
+        /* Implicitly returns the internal window object. */
+        inline operator GLFWwindow*() const { return this->glfw_window; }
+        /* Explicitly returns the internal surface object, if necessary. */
         inline const VkSurfaceKHR surface() const { return this->vk_surface; }
+        /* Implicitly returns the internal surface object. */
+        inline operator VkSurfaceKHR() const { return this->vk_surface; }
 
     };
 }

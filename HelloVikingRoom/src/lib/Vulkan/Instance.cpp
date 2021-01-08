@@ -146,3 +146,18 @@ Vulkan::Instance::~Instance() {
 
     DLEAVE;
 }
+
+
+
+/* Move assignment operator for the Instance class. */
+Vulkan::Instance& Vulkan::Instance::operator=(Vulkan::Instance&& other) {
+    if (this != &other) { swap(*this, other); }
+    return *this;
+}
+
+/* Swap operator for the Instance class. */
+void Vulkan::swap(Vulkan::Instance& i1, Vulkan::Instance& i2) {
+    using std::swap;
+
+    swap(i1.vk_instance, i2.vk_instance);
+}

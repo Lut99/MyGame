@@ -43,7 +43,17 @@ namespace HelloVikingRoom::Vulkan {
         inline VkInstance instance() const { return this->vk_instance; }
         /* Enable implicit conversion to the VkInstance class. */
         inline operator VkInstance() const { return this->vk_instance; }
+
+        /* Copy assignment operator for the Instance class, which is deleted. */
+        Instance& operator=(const Instance& other) = delete;
+        /* Move assignment operator for the Instance class. */
+        Instance& operator=(Instance&& other);
+        /* Swap operator for the Instance class. */
+        friend void swap(Instance& i1, Instance& i2);
     };
+
+    /* Swap operator for the Instance class. */
+    void swap(Instance& i1, Instance& i2);
 }
 
 #endif
