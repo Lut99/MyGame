@@ -91,10 +91,10 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Vulkan::Debugger::vk_callback(
             severity = info;
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-            severity = warning;
+            severity = vulkan_warning;
             break;
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-            severity = nonfatal;
+            severity = vulkan_error;
             break;
         default:
             severity = (Debug::Severity) -1;
@@ -106,7 +106,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Vulkan::Debugger::vk_callback(
 
     // Log the message with the correct severity
     Debug::Debugger* debugger = (Debug::Debugger*) user_data;
-    debugger->log(severity, std::string("[\033[1mVULKAN\033[0m] ") + pCallbackData->pMessage);
+    debugger->log(severity, pCallbackData->pMessage);
     return VK_FALSE;
 }
 
