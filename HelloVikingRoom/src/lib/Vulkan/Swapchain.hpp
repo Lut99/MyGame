@@ -31,6 +31,8 @@ namespace HelloVikingRoom::Vulkan {
 
         /* The Frames that reside in the swapchain. */
         Tools::Array<VkImage> vk_images;
+        /* The image views that are inherently linked to this swapchain. */
+        Tools::Array<VkImageView> vk_imageviews;
         /* The image format we chose for this swapchain. */
         VkFormat vk_format;
         /* The extent (i.e., resolution) of the swapchain frames. */
@@ -59,6 +61,8 @@ namespace HelloVikingRoom::Vulkan {
 
         /* Explicitly returns a constant reference the images inside the Swapchain. */
         inline const Tools::Array<VkImage>& images() const { return this->vk_images; }
+        /* Explicitly returns a constant reference to the imageviews referencing the images of the Swapchain. */
+        inline const Tools::Array<VkImageView>& imageviews() const { return this->vk_imageviews; }
         /* Explititly returns the format of the images inside the Swapchain. */
         inline VkFormat format() const { return this->vk_format; }
         /* Explititly returns the resolution (extent) of the images inside the Swapchain. */

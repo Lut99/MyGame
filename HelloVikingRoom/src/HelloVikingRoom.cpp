@@ -24,6 +24,7 @@
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Debugger.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/Swapchain.hpp"
 #include "Application/MainWindow.hpp"
 #include "Tools/Array.hpp"
 #include "Debug/Debug.hpp"
@@ -195,6 +196,8 @@ int main() {
 
         // Create a Device instance
         Vulkan::Device device(instance, window.surface(), device_extensions);
+        // Create the swapchain for that device
+        Vulkan::Swapchain swapchain(window, device);
 
 
 
