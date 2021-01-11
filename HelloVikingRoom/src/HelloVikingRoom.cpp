@@ -25,6 +25,7 @@
 #include "Vulkan/Debugger.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Swapchain.hpp"
+#include "Vulkan/Renderpasses/SquarePass.hpp"
 #include "Application/MainWindow.hpp"
 #include "Tools/Array.hpp"
 #include "Debug/Debug.hpp"
@@ -162,7 +163,7 @@ Array<const char*> trim_layers(const Array<const char*>& to_trim) {
 
 /***** ENTRY POINT *****/
 int main() {
-    DENTER("main");
+    DSTART("main thread"); DENTER("main");
     DLOG(auxillary, "");
     DLOG(auxillary, "<<<<< HELLO VIKINGROOM >>>>>");
     DLOG(auxillary, "");
@@ -199,7 +200,8 @@ int main() {
         // Create the swapchain for that device
         Vulkan::Swapchain swapchain(window, device);
 
-
+        // Create our only render pass (for now)
+        Vulkan::RenderPasses::SquarePass render_pass(device, swapchain);
 
 
 
