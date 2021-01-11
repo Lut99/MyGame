@@ -44,6 +44,10 @@
 #ifndef NDEBUG
 /***** MACROS WHEN DEBUGGING IS ENABLED *****/
 
+/* Registers a given thread to the debugger. Should therefore be called before DENTER() in the first function of a thread. */
+#define DSTART(THREAD_NAME) \
+    Debug::debugger.start((THREAD_NAME));
+
 /* Registers given function on the debugger's stacktrace. */
 #define DENTER(FUNC_NAME) \
     Debug::debugger.push((FUNC_NAME), (__FILE__), (__LINE__) - 1);
@@ -81,6 +85,9 @@
 
 #else
 /***** MACROS WHEN DEBUGGING IS DISABLED *****/
+
+/* Registers a given thread to the debugger. Should therefore be called before DENTER() in the first function of a thread. */
+#define DSTART(THREAD_NAME)
 
 /* Registers given function on the debugger's stacktrace. */
 #define DENTER(FUNC_NAME)
@@ -158,6 +165,8 @@ namespace Debug {
         static constexpr size_t prefix_size = 10;
 
     private:
+        /* Maps thread ids to programmer-readable names. */
+        std::unordered_map<std::thread::id, std::string> thread_names;
         /* The stack of frames we're currently in. */
         std::unordered_map<std::thread::id, std::vector<Frame>> stack;
         /* List of currently muted functions. */
@@ -198,6 +207,9 @@ namespace Debug {
     public:
         /* Default constructor for the Debugger class. */
         Debugger();
+
+        /* Registers a new name for the current thread. */
+        void start(const std::string& thread_name);
         
         /* Enters a new function, popping it's value on the stack. */
         void push(const std::string& function_name, const std::string& file_name, size_t line_number);

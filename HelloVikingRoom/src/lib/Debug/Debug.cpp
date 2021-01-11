@@ -65,7 +65,7 @@ Debugger::Debugger() :
     warning_msg(this->colour_enabled ? "[" YELLOW "WARNING" RESET "] " : "[WARNING] "),
     nonfatal_msg(this->colour_enabled ? "[" RED "FAILURE" RESET "] " : "[FAILURE] "),
     fatal_msg(this->colour_enabled ? "[" RED REVERSED " ERROR " RESET "] " : "[ ERROR ] "),
-    vulkan_warning_msg(this->colour_enabled ? "[" YELLOW "VKWARNG" RESET "] " : "[VKWARNG] "),
+    vulkan_warning_msg(this->colour_enabled ? "[" YELLOW "VK WARN" RESET "] " : "[VK WARN] "),
     vulkan_error_msg(this->colour_enabled ? "[" RED "VKERROR" RESET "] " : "[VKERROR] "),
     reset_msg(this->colour_enabled ? RESET : ""),
     main_tid(std::this_thread::get_id())
@@ -102,8 +102,15 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
     // Acquire the lock for this function
     std::unique_lock<std::mutex> _log_lock(this->lock);
 
-    // Determine the type of message to preprend to signify how it went
+    // Get the thread ID and, optionally, its name if defined
     std::thread::id tid = std::this_thread::get_id();
+    std::string thread_name;
+    std::unordered_map<std::thread::id, std::string>::const_iterator iter = this->thread_names.find(tid);
+    if (iter != this->thread_names.end()) {
+        thread_name = (*iter).second;
+    }
+
+    // Determine the type of message to preprend to signify how it went
     switch(severity) {
         case auxillary:
             // Print as a prefix; i.e., a plain message with correct indents
@@ -202,7 +209,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                         this->print_linewrapped(os, x, width, prefix_indent + prefix + " function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m");
                         os << reset_msg << std::endl;
                     }
-                    os << prefix_indent << "from thread \033[1m" << tid << "\033[0m" << (tid == this->main_tid ? " (main)" : "") << std::endl;
+                    os << prefix_indent << "from thread \033[1m" << tid << "\033[0m" << (thread_name.empty() ? "" : " (" + thread_name + ")") << std::endl;
                     os << std::endl;
                 }
 
@@ -229,7 +236,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                         this->print_linewrapped(os, x, width, prefix_indent + prefix + " function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m");
                         os << reset_msg << std::endl;
                     }
-                    os << prefix_indent << "from thread \033[1m" << tid << "\033[0m" << (tid == this->main_tid ? " (main)" : "") << std::endl;
+                    os << prefix_indent << "from thread \033[1m" << tid << "\033[0m" << (thread_name.empty() ? "" : " (" + thread_name + ")") << std::endl;
                     os << std::endl;
                 }
 
@@ -290,7 +297,7 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
                         this->print_linewrapped(os, x, width, prefix_indent + prefix + " function '\033[1m" + f.func_name + "\033[0m' at \033[1m" + f.file_name + ':' + std::to_string(f.line_number) + "\033[0m");
                         os << reset_msg << std::endl;
                     }
-                    os << prefix_indent << "from thread \033[1m" << tid << "\033[0m" << (tid == this->main_tid ? " (main)" : "") << std::endl;
+                    os << prefix_indent << "from thread \033[1m" << tid << "\033[0m" << (thread_name.empty() ? "" : " (" + thread_name + ")") << std::endl;
                     os << std::endl;
                 }
 
@@ -300,6 +307,24 @@ void Debugger::_log(std::ostream& os, Severity severity, const std::string& mess
         default:
             // Let's re-do as auxillary
             this->_log(os, auxillary, message, extra_indent);
+    }
+}
+
+
+
+/* Registers a new name for the current thread. */
+void Debugger::start(const std::string& thread_name) {
+    // Check if it already exists
+    std::unordered_map<std::thread::id, std::string>::iterator iter = this->thread_names.find(std::this_thread::get_id());
+    if (iter != this->thread_names.end()) {
+        // It already does; simply replace the name
+        (*iter).second = thread_name;
+    } else {
+        // It doesn't; insert it
+        this->thread_names.insert(std::make_pair(std::this_thread::get_id(), thread_name));
+        // // Also add a vector to the callstack map & muted map for this thread
+        // this->stack.insert(std::make_pair(std::this_thread::get_id(), std::vector<Frame>()));
+        // this->muted.insert(std::make_pair(std::this_thread::get_id(), std::vector<std::string>()));
     }
 }
 
