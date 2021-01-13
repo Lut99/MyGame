@@ -37,3 +37,6 @@ build/
 
 # Also any windows debug symbols
 *.pdb
+
+# Everything in the .vscode folder
+.vscode/*
