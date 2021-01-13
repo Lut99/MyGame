@@ -64,6 +64,7 @@ add_library(array_initialization ${PROJECT_SOURCE_DIR}/tests/Array/initializatio
 add_library(array_consistancy ${PROJECT_SOURCE_DIR}/tests/Array/consistancy.cpp)
 add_library(array_resize ${PROJECT_SOURCE_DIR}/tests/Array/resize.cpp)
 add_library(array_push_erase ${PROJECT_SOURCE_DIR}/tests/Array/push_erase.cpp)
+add_library(array_constructors ${PROJECT_SOURCE_DIR}/tests/Array/constructors.cpp)
 
 # Add the generated hpp's to the include directories, plus the library directory
 target_include_directories(test_array PUBLIC "${INCLUDE_DIRS}")
@@ -72,6 +73,7 @@ target_include_directories(array_initialization PUBLIC "${INCLUDE_DIRS}")
 target_include_directories(array_consistancy PUBLIC "${INCLUDE_DIRS}")
 target_include_directories(array_resize PUBLIC "${INCLUDE_DIRS}")
 target_include_directories(array_push_erase PUBLIC "${INCLUDE_DIRS}")
+target_include_directories(array_constructors PUBLIC "${INCLUDE_DIRS}")
 
 # Add which libraries to link
 target_link_libraries(test_array PUBLIC
@@ -79,4 +81,5 @@ target_link_libraries(test_array PUBLIC
                       array_consistancy
                       array_resize
                       array_push_erase
+                      array_constructors
                       )

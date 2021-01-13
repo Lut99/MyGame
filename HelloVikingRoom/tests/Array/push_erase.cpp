@@ -4,7 +4,7 @@
  * Created:
  *   12/23/2020, 5:31:23 PM
  * Last edited:
- *   12/24/2020, 12:50:11 PM
+ *   1/13/2021, 4:22:47 PM
  * Auto updated?
  *   Yes
  *
@@ -263,7 +263,7 @@ bool test_range_erase() {
     // Test if the values made it
     for (size_t i = 0; i < test.size(); i++) {
         if (*test[i] != i + 1) {
-             ERROR("Erasing from non-empty array failed; incorrect value at index " + std::to_string(i) + ": expected " + std::to_string(i + 1) + ", got " + std::to_string(*test[i]));
+            ERROR("Erasing from non-empty array failed; incorrect value at index " + std::to_string(i) + ": expected " + std::to_string(i + 1) + ", got " + std::to_string(*test[i]));
             ENDCASE(false);
         }
     }
