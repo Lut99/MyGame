@@ -17,6 +17,7 @@
 #define VULKAN_SHADER_MODULE_HPP
 
 #include <string>
+#include <vector>
 
 #include "Device.hpp"
 
@@ -24,17 +25,21 @@ namespace HelloVikingRoom::Vulkan {
     /* The ShaderModule class, which loads the shader at the given path and manages the internal object. */
     class ShaderModule {
     private:
+        /* The raw shader data parsed from a file. */
+        std::vector<char> shader_data;
         /* The internal VkShaderModule object that this class wraps. */
         VkShaderModule vk_shader_module;
 
     public:
         /* Constant reference to the Device that this module is compiled for. */
         const Device& device;
+        /* Path that this ShaderModule is loaded from. */
+        const std::string path;
 
         /* Constructor for the ShaderModule class, which takes the device to compile the shader for and the path of the .spv file to load. */
         ShaderModule(const Device& device, const std::string& path);
-        /* Copy constructor for the ShaderModule class, which is deleted. */
-        ShaderModule(const ShaderModule& other) = delete;
+        /* Copy constructor for the ShaderModule class. */
+        ShaderModule(const ShaderModule& other);
         /* Move constructor for the ShaderModule class. */
         ShaderModule(ShaderModule&& other);
         /* Destructor for the ShaderModule class. */

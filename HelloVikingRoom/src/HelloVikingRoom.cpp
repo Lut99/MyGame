@@ -26,7 +26,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Swapchain.hpp"
 #include "Vulkan/Renderpasses/SquarePass.hpp"
-#include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/GraphicsPipelines/SquarePipeline.hpp"
 #include "Application/MainWindow.hpp"
 #include "Tools/Array.hpp"
 #include "Debug/Debug.hpp"
@@ -201,8 +201,9 @@ int main() {
         // Create the swapchain for that device
         Vulkan::Swapchain swapchain(window, device);
 
-        // Create our only render pass (for now)
+        // Create our only render pass (for now), and use that to create a graphics pipeline
         Vulkan::RenderPasses::SquarePass render_pass(device, swapchain);
+        Vulkan::GraphicsPipelines::SquarePipeline pipeline(device, swapchain, render_pass);
 
 
 

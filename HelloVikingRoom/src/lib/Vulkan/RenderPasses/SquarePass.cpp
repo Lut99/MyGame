@@ -29,7 +29,7 @@ SquarePass::SquarePass(const Device& device, const Swapchain& swapchain) :
     RenderPass(device)
 {
     DENTER("Vulkan::RenderPasses::SquarePass::SquarePass");
-    DLOG(info, "Initializing Vulkan SquarePass...");
+    DLOG(info, "Initializing Vulkan SquarePass render pass...");
 
     // Start by defining the VkAttachementDescription. We only have one framebuffer with one image, so we also only need one attachment
     this->vk_attachments.push_back({});
@@ -93,7 +93,7 @@ SquarePass::SquarePass(SquarePass&& other) :
 /* Destructor for the SquarePass class. */
 SquarePass::~SquarePass() {
     DENTER("Vulkan::RenderPasses::SquarePass::~SquarePass");
-    DLOG(info, "Cleaning Vulkan SquarePass...");
+    DLOG(info, "Cleaning Vulkan SquarePass render pass...");
     DLEAVE;
 }
 

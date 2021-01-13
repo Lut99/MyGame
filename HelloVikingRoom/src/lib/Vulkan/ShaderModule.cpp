@@ -30,55 +30,75 @@ using namespace Debug::SeverityValues;
 /***** SHADERMODULE CLASS *****/
 /* Constructor for the ShaderModule class, which takes the device to compile the shader for and the path of the .spv file to load. */
 ShaderModule::ShaderModule(const Device& device, const std::string& path) :
-    device(device)
+    vk_shader_module(nullptr),
+    device(device),
+    path(path)
 {
     DENTER("Vulkan::ShaderModule::ShaderModule");
-    DLOG(info, "Loading Vulkan shader module '" + path + "'...");
-
-    // First, retrieve the current directory's filepath
-    
+    DLOG(auxillary, "Loading Vulkan shader module '" + path + "'...");
 
     // First, open a file handle (from the end of the file, ate, instead of the beginning) to try and load the given file as raw binary data
-    std::ifstream file(path, std::ios::ate | std::ios::binary);
+    std::ifstream file(this->path, std::ios::ate | std::ios::binary);
     if (!file.is_open()) {
         char buffer[BUFSIZ];
         strerror_s(buffer, BUFSIZ, errno);
-        DLOG(fatal, "Failed to open shader file '" + path + "': " + buffer);
+        DLOG(fatal, "Failed to open shader file '" + this->path + "': " + buffer);
     }
 
     // Since we're at the end of the file, read the position to know the size of our file buffer
     size_t file_size = file.tellg();
-    size_t n_ints = file_size / 4 + (file_size % 4 == 0 ? 0 : 1);
-    uint32_t* raw_buffer = new uint32_t[n_ints];
+    this->shader_data.resize(file_size);
 
     // Go the beginning of the file and fill the buffer
     file.seekg(0);
-    file.read((char*) raw_buffer, file_size);
+    file.read(this->shader_data.data(), file_size);
     file.close();
 
     // Use the allocated buffer to create the VkShaderModule object
     VkShaderModuleCreateInfo shader_module_info{};
     shader_module_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     // Add the pointer to the spv code
-    shader_module_info.codeSize = file_size;
-    shader_module_info.pCode = raw_buffer;
+    shader_module_info.codeSize = this->shader_data.size();
+    shader_module_info.pCode = reinterpret_cast<uint32_t*>(this->shader_data.data());
 
-    // Create the module
+    // Create the module & we're done!
     if (vkCreateShaderModule(this->device, &shader_module_info, nullptr, &this->vk_shader_module) != VK_SUCCESS) {
-        delete[] raw_buffer;
         DLOG(fatal, "Could not create shader module.");
     }
 
-    // We're done, so deallocate the raw buffer
-    delete[] raw_buffer;
+    DLEAVE;
+}
+
+/* Copy constructor for the ShaderModule class. */
+ShaderModule::ShaderModule(const ShaderModule& other) :
+    shader_data(other.shader_data),
+    vk_shader_module(nullptr),
+    device(other.device),
+    path(other.path)
+{
+    DENTER("Vulkan::ShaderModule::ShaderModule(copy)");
+
+    // Use the allocated buffer to create the VkShaderModule object
+    VkShaderModuleCreateInfo shader_module_info{};
+    shader_module_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    // Add the pointer to the spv code
+    shader_module_info.codeSize = this->shader_data.size();
+    shader_module_info.pCode = reinterpret_cast<uint32_t*>(this->shader_data.data());
+
+    // Create the module & we're done!
+    if (vkCreateShaderModule(this->device, &shader_module_info, nullptr, &this->vk_shader_module) != VK_SUCCESS) {
+        DLOG(fatal, "Could not create shader module.");
+    }
 
     DLEAVE;
 }
 
 /* Move constructor for the ShaderModule class. */
 ShaderModule::ShaderModule(ShaderModule&& other) :
+    shader_data(other.shader_data),
     vk_shader_module(other.vk_shader_module),
-    device(device)
+    device(other.device),
+    path(other.path)
 {
     other.vk_shader_module = nullptr;
 }
@@ -86,7 +106,7 @@ ShaderModule::ShaderModule(ShaderModule&& other) :
 /* Destructor for the ShaderModule class. */
 ShaderModule::~ShaderModule() {
     DENTER("Vulkan::ShaderModule::~ShaderModule");
-    DLOG(info, "Cleaning Vulkan shader module...");
+    DLOG(auxillary, "Cleaning Vulkan shader module...");
 
     if (this->vk_shader_module != nullptr) {
         vkDestroyShaderModule(this->device, this->vk_shader_module, nullptr);
