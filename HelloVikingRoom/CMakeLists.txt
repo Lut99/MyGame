@@ -20,7 +20,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 get_target_property(GLFW_DIR glfw INTERFACE_INCLUDE_DIRECTORIES)
 SET(INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/src/lib" "${Vulkan_INCLUDE_DIRS}" "${GLFW_DIR}")
 
-# Add the lib subdirectory
+# Load the libraries
 add_subdirectory(src)
 
 
@@ -28,6 +28,11 @@ add_subdirectory(src)
 ##### HELLOVIKINGROOM TARGET #####
 # Specify which file will compile to the executable
 add_executable(hellovikingroom ${PROJECT_SOURCE_DIR}/src/HelloVikingRoom.cpp)
+# Set the output to bin directory
+set_target_properties(hellovikingroom
+                      PROPERTIES 
+                      RUNTIME_OUTPUT_DIRECTORY_DEBUG ${PROJECT_SOURCE_DIR}/bin
+                      )
 
 # Add the generated hpp's to the include directories, plus the library directory
 target_include_directories(hellovikingroom PUBLIC "${INCLUDE_DIRS}")
@@ -40,6 +45,14 @@ target_link_libraries(hellovikingroom PUBLIC
                       )
 
 
+
+##### BUILDING SHADERS #####
+# Define the custom commands to compile the shaders
+add_custom_command(TARGET hellovikingroom POST_BUILD
+    COMMAND glslc -o ${PROJECT_SOURCE_DIR}/bin/vert.spv ${PROJECT_SOURCE_DIR}/src/lib/Shaders/shader.vert
+    COMMAND glslc -o ${PROJECT_SOURCE_DIR}/bin/frag.spv ${PROJECT_SOURCE_DIR}/src/lib/Shaders/shader.frag
+    COMMENT "Building shaders..."
+)
 
 
 
@@ -67,14 +80,3 @@ target_link_libraries(test_array PUBLIC
                       array_resize
                       array_push_erase
                       )
-
-
-
-
-
-##### TARGET FOR COMPILING THE SHADERS #####
-# Generate the shaders
-add_custom_target(
-  build_shaders ALL
-  DEPENDS ${PROJECT_BINARY_DIR}/vert.spv ${PROJECT_BINARY_DIR}/frag.spv
-)

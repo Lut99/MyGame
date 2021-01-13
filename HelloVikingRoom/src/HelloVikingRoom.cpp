@@ -26,6 +26,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Swapchain.hpp"
 #include "Vulkan/Renderpasses/SquarePass.hpp"
+#include "Vulkan/ShaderModule.hpp"
 #include "Application/MainWindow.hpp"
 #include "Tools/Array.hpp"
 #include "Debug/Debug.hpp"

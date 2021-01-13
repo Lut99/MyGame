@@ -322,9 +322,6 @@ void Debugger::start(const std::string& thread_name) {
     } else {
         // It doesn't; insert it
         this->thread_names.insert(std::make_pair(std::this_thread::get_id(), thread_name));
-        // // Also add a vector to the callstack map & muted map for this thread
-        // this->stack.insert(std::make_pair(std::this_thread::get_id(), std::vector<Frame>()));
-        // this->muted.insert(std::make_pair(std::this_thread::get_id(), std::vector<std::string>()));
     }
 }
 
