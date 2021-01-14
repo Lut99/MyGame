@@ -4,7 +4,7 @@
  * Created:
  *   13/01/2021, 12:04:23
  * Last edited:
- *   13/01/2021, 12:04:23
+ *   1/14/2021, 12:22:36 PM
  * Auto updated?
  *   Yes
  *
@@ -40,8 +40,12 @@ ShaderModule::ShaderModule(const Device& device, const std::string& path) :
     // First, open a file handle (from the end of the file, ate, instead of the beginning) to try and load the given file as raw binary data
     std::ifstream file(this->path, std::ios::ate | std::ios::binary);
     if (!file.is_open()) {
+        #ifdef _WIN32
         char buffer[BUFSIZ];
         strerror_s(buffer, BUFSIZ, errno);
+        #else
+        char* buffer = strerror(errno);
+        #endif
         DLOG(fatal, "Failed to open shader file '" + this->path + "': " + buffer);
     }
 

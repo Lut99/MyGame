@@ -4,7 +4,7 @@
  * Created:
  *   12/22/2020, 4:59:25 PM
  * Last edited:
- *   1/13/2021, 5:27:06 PM
+ *   1/14/2021, 12:36:20 PM
  * Auto updated?
  *   Yes
  *
@@ -291,7 +291,7 @@ template<class T, bool D, bool C, bool M> T* const Array<T, D, C, M>::wdata(size
 
 
 /* Move assignment operator for the Array class. */
-template<class T, bool D, bool C, bool M> Array<T>& Array<T, D, C, M>::operator=(Array<T>&& other) {
+template<class T, bool D, bool C, bool M> Array<T, D, C, M>& Array<T, D, C, M>::operator=(Array<T, D, C, M>&& other) {
     if (this != &other) { swap(*this, other); }
     return *this;
 }

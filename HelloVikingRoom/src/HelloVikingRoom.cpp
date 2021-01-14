@@ -4,7 +4,7 @@
  * Created:
  *   19/12/2020, 16:23:17
  * Last edited:
- *   12/24/2020, 1:05:12 PM
+ *   1/14/2021, 12:49:38 PM
  * Auto updated?
  *   Yes
  *
@@ -25,7 +25,7 @@
 #include "Vulkan/Debugger.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Swapchain.hpp"
-#include "Vulkan/Renderpasses/SquarePass.hpp"
+#include "Vulkan/RenderPasses/SquarePass.hpp"
 #include "Vulkan/GraphicsPipelines/SquarePipeline.hpp"
 #include "Application/MainWindow.hpp"
 #include "Tools/Array.hpp"

@@ -4,7 +4,7 @@
  * Created:
  *   1/13/2021, 4:05:43 PM
  * Last edited:
- *   1/13/2021, 5:28:10 PM
+ *   1/14/2021, 1:25:20 PM
  * Auto updated?
  *   Yes
  *
@@ -111,9 +111,11 @@ static bool test_nodefault() {
     TESTCASE("without default constructor");
 
     Array<NoDefault> test = { NoDefault(1), NoDefault(2), NoDefault(3) };
-    for (size_t i = 0; i < test.size(); i++) {
-        if (test[i].get_value() != i + 1) {
-            ERROR("Constructing without default failed; expected " + std::to_string(i + 1) + ", got " + std::to_string(test[i].get_value()));
+    test.push_back(NoDefault(4));
+    Array<NoDefault> test2 = test;
+    for (size_t i = 0; i < test2.size(); i++) {
+        if (test2[i].get_value() != i + 1) {
+            ERROR("Constructing without default failed; expected " + std::to_string(i + 1) + ", got " + std::to_string(test2[i].get_value()));
             ENDCASE(false);
         }
     }
