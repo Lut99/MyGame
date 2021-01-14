@@ -24,7 +24,7 @@
 #include <cstdio>
 
 namespace Tools {
-    /* The Array class, which can be used as a container for many things. */
+    /* The Array class, which can be used as a container for many things. It's optimized to work for containers that rarely (but still sometimes) have to resize. */
     template <class T, bool D = std::is_default_constructible<T>::value, bool C = std::is_copy_constructible<T>::value, bool M = std::is_move_constructible<T>::value>
     class Array {
     protected:
@@ -108,7 +108,9 @@ namespace Tools {
 
     
 
-    /* Class specialization for when the target type that is copy constructible and move constructible, but has no default constructor. */
+    /* The Array class, which can be used as a container for many things. It's optimized to work for containers that rarely (but still sometimes) have to resize.
+     * This class specialization is for when the contained type is copy constructible and move constructible, but not default constructible.
+     */
     template <class T>
     class Array<T, false, true, true>: public Array<T, true, true, true> {
     public:
@@ -140,7 +142,9 @@ namespace Tools {
         friend inline void swap(Array& a1, Array& a2) { return swap((Array<T, true, true, true>&) a1, (Array<T, true, true, true>&) a2); }
     };
     
-    /* Class specialization for when the target type that has a default constructor and is move constructible, but not copy constructible. */
+    /* The Array class, which can be used as a container for many things. It's optimized to work for containers that rarely (but still sometimes) have to resize.
+     * This class specialization is for when the contained type is default constructible and move constructible, but not copy constructible.
+     */
     template <class T>
     class Array<T, true, false, true>: public Array<T, true, true, true> {
     public:
@@ -168,7 +172,9 @@ namespace Tools {
         friend inline void swap(Array& a1, Array& a2) { swap((Array<T, true, true, true>&) a1, (Array<T, true, true, true>&) a2); }
     };
     
-    /* Class specialization for when the target type that is default constructible and copy constructible, but not move constructible. */
+    /* The Array class, which can be used as a container for many things. It's optimized to work for containers that rarely (but still sometimes) have to resize.
+     * This class specialization is for when the contained type is default constructible and copy constructible, but not move constructible.
+     */
     template <class T>
     class Array<T, true, true, false>: public Array<T, true, true, true> {
     public:
@@ -202,7 +208,9 @@ namespace Tools {
         friend inline void swap(Array& a1, Array& a2) { swap((Array<T, true, true, true>&) a1, (Array<T, true, true, true>&) a2); }
     };
     
-    /* Class specialization for when the target type that is neither default constructible nor copy constructible, but is move constructible. */
+    /* The Array class, which can be used as a container for many things. It's optimized to work for containers that rarely (but still sometimes) have to resize.
+     * This class specialization is for when the contained type is neither default constructible nor copy constructible, but is move constructible.
+     */
     template <class T>
     class Array<T, false, false, true>: public Array<T, true, true, true> {
     public:
@@ -233,7 +241,9 @@ namespace Tools {
         friend inline void swap(Array& a1, Array& a2) { swap((Array<T, true, true, true>&) a1, (Array<T, true, true, true>&) a2); }
     };
 
-    /* Class specialization for when the target type that is neither default constructible nor move constructible, but is copy constructible. */
+    /* The Array class, which can be used as a container for many things. It's optimized to work for containers that rarely (but still sometimes) have to resize.
+     * This class specialization is for when the contained type is neither default constructible nor move constructible, but is copy constructible.
+     */
     template <class T>
     class Array<T, false, true, false>: public Array<T, true, true, true> {
     public:
@@ -270,7 +280,9 @@ namespace Tools {
         friend inline void swap(Array& a1, Array& a2) { swap((Array<T, true, true, true>&) a1, (Array<T, true, true, true>&) a2); }
     };
 
-    /* Class specialization for when the target type that is neither copy constructible nor move constructible, but is default constructible. */
+    /* The Array class, which can be used as a container for many things. It's optimized to work for containers that rarely (but still sometimes) have to resize.
+     * This class specialization is for when the contained type is neither copy constructible nor move constructible, but is default constructible.
+     */
     template <class T>
     class Array<T, true, false, false>: public Array<T, true, true, true> {
     public:
@@ -298,7 +310,9 @@ namespace Tools {
         friend inline void swap(Array& a1, Array& a2) { swap((Array<T, true, true, true>&) a1, (Array<T, true, true, true>&) a2); }
     };
 
-    /* Class specialization for when the target type that is neither default constructible, copy constructible nor move constructible. */
+    /* The Array class, which can be used as a container for many things. It's optimized to work for containers that rarely (but still sometimes) have to resize.
+     * This class specialization is for when the contained type is neither default constructible, copy constructible nor move constructibl.
+     */
     template <class T>
     class Array<T, false, false, false>: public Array<T, true, true, true> {
     public:
