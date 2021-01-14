@@ -25,6 +25,7 @@
 #include "Vulkan/Debugger.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Swapchain.hpp"
+#include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPasses/SquarePass.hpp"
 #include "Vulkan/GraphicsPipelines/SquarePipeline.hpp"
 #include "Application/MainWindow.hpp"
@@ -204,6 +205,14 @@ int main() {
         // Create our only render pass (for now), and use that to create a graphics pipeline
         Vulkan::RenderPasses::SquarePass render_pass(device, swapchain);
         Vulkan::GraphicsPipelines::SquarePipeline pipeline(device, swapchain, render_pass);
+
+        // Create the framebuffers
+        Array<Vulkan::Framebuffer> framebuffers(swapchain.imageviews().size());
+        for (size_t i = 0; i < swapchain.imageviews().size(); i++) {
+            framebuffers.push_back(
+                Vulkan::Framebuffer(device, swapchain.imageviews()[i], swapchain, render_pass)
+            );
+        }
 
 
 

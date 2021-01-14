@@ -1,5 +1,5 @@
 # Specify the libraries in this directory
-add_library(VulkanLib Debugger.cpp Instance.cpp Device.cpp Swapchain.cpp RenderPass.cpp ShaderModule.cpp GraphicsPipeline.cpp)
+add_library(VulkanLib Debugger.cpp Instance.cpp Device.cpp Swapchain.cpp RenderPass.cpp ShaderModule.cpp GraphicsPipeline.cpp Framebuffer.cpp)
 # Set the include directories for these libraries:
 target_include_directories(VulkanLib PUBLIC
                            "${INCLUDE_DIRS}")
