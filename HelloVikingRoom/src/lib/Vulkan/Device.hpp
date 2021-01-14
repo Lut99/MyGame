@@ -136,6 +136,8 @@ namespace HelloVikingRoom::Vulkan {
         inline const VkPhysicalDevice& physical_device() const { return this->vk_physical_device; }
         /* Explicity retrieves the internal VkDevice instance. */
         inline const VkDevice& device() const { return this->vk_device; }
+        /* Enable implicit conversion to the internal VkPhysicalDevice instance. */
+        inline operator VkPhysicalDevice() const { return this->vk_physical_device; }
         /* Enable implicit conversion to the internal VkDevice instance. */
         inline operator VkDevice() const { return this->vk_device; }
 
