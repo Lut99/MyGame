@@ -135,7 +135,7 @@ uint32_t Buffer::get_memory_type(const Device& device, uint32_t type_filter, VkM
 }
 
 /* Copies one Buffer to the other. Both buffers must be on the same device, and the source buffer must have VK_BUFFER_USAGE_TRANSFER_SRC_BIT and the destination buffer VK_BUFFER_TRANSFER_DST_BIT. Additionally, the destination buffer must have at least as many bytes allocated as the source one. The final argument is the command pool where we'll create the temporary command buffer for the copy. */
-void Buffer::copy(Buffer& destination, const Buffer& source, const CommandPool& command_pool) {
+void Buffer::copy(Buffer& destination, const Buffer& source, CommandPool& command_pool) {
     DENTER("Vulkan::Buffer::copy");
 
     // First, check if the device, bits and size matches
@@ -152,31 +152,9 @@ void Buffer::copy(Buffer& destination, const Buffer& source, const CommandPool& 
     //     DLOG(fatal, "Destination buffer does not have the VK_BUFFER_USAGE_TRANSFER_SRC_BIT set.");
     // }
 
-    // Prepare a command buffer that we'll use once to preform the copy
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    // Tell it that this is a primary command buffer, i.e., one that can be invoked by us instead of another command buffer
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    // The command pool where the buffer will be created
-    alloc_info.commandPool = command_pool;
-    // Tell it how many buffers to allocate
-    alloc_info.commandBufferCount = 1;
-
-    // Actually perform the allocation
-    VkCommandBuffer command_buffer;
-    if (vkAllocateCommandBuffers(destination.device, &alloc_info, &command_buffer) != VK_SUCCESS) {
-        DLOG(fatal, "Could not allocate temporary copy command buffer.");
-    }
-
-    // Start recording this command buffer right away
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    // Tell it we'll only be needin' the buffer once
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    // Start the record
-    if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
-        DLOG(fatal, "Could not begin recording in temporary command buffer.");
-    }
+    // Get a temporary command buffer
+    CommandBuffer command_buffer = command_pool.get_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    command_buffer.begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
     // Schedule the copy
     VkBufferCopy copy_region{};
@@ -186,13 +164,13 @@ void Buffer::copy(Buffer& destination, const Buffer& source, const CommandPool& 
     vkCmdCopyBuffer(command_buffer, source, destination, 1, &copy_region);
 
     // Since that's all we wanna do, we're done here
-    vkEndCommandBuffer(command_buffer);
+    command_buffer.end();
 
     // Next, we'll submit the command buffer to the graphics queue so it can copy
     VkSubmitInfo submit_info{};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &command_buffer;
+    submit_info.pCommandBuffers = &command_buffer.command_buffer();
 
     // Submit the command buffer, and then wait until the copying is done
     if (vkQueueSubmit(destination.device.graphics_queue(), 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
@@ -201,9 +179,6 @@ void Buffer::copy(Buffer& destination, const Buffer& source, const CommandPool& 
     if (vkQueueWaitIdle(destination.device.graphics_queue()) != VK_SUCCESS) {
         DLOG(fatal, "Something went wrong while waiting for graphics queue to finish copying.");
     }
-
-    // Now we're done, free the command buffer since we won't need it anymore
-    vkFreeCommandBuffers(destination.device, command_pool, 1, &command_buffer);
 
     DLEAVE;
 }
@@ -254,7 +229,7 @@ void Buffer::set(void* data, size_t n_bytes) {
 }
 
 /* Populates the buffer through a temporary staging buffer. Note that this buffer is recommended to have the VK_USAGE_TRANSFER_DST_BIT set, but it's not necessary. */
-void Buffer::set_staging(void* data, size_t data_size, const CommandPool& command_pool) {
+void Buffer::set_staging(void* data, size_t data_size, CommandPool& command_pool) {
     DENTER("Vulkan::Buffer::set_staging");
 
     // Create the staging buffer
