@@ -20,7 +20,10 @@
 #include <iostream>
 #include <exception>
 #include <algorithm>
+#include <chrono>
 
+#define GLM_FORCE_RADIANS
+#include "glm/gtc/matrix_transform.hpp"
 #include "Vertices/Vertex.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Debugger.hpp"
@@ -29,6 +32,8 @@
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Buffer.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/UniformBuffer.hpp"
 #include "Vulkan/Semaphore.hpp"
 #include "Vulkan/Fence.hpp"
 #include "Vulkan/RenderPasses/SquarePass.hpp"
@@ -41,6 +46,21 @@ using namespace std;
 using namespace HelloVikingRoom;
 using namespace Tools;
 using namespace Debug::SeverityValues;
+
+
+/***** STRUCTS *****/
+/* The UniformBufferObject is used to pass transformation matrices to shaders. */
+struct UniformBufferObject {
+    /* The model matrix, which moves an object from model space (where the model's at 0, 0, 0) to world space. I.e., encodes the position of our model in the world. */
+    glm::mat4 model;
+    /* The view matrix, i.e., the camera. In mathmatical terms: translates all models in world space to camera space, where the camera is at (0, 0, 0). */
+    glm::mat4 view;
+    /* The projection matrix transforms the camera space to homogeneous space, which translates the normally-skewed camera box (trapezium-like) to a square so it's much easier to run the shaders. */
+    glm::mat4 proj;
+};
+
+
+
 
 
 /***** CONSTANTS *****/
@@ -249,7 +269,8 @@ void resize_swapchain(
     Vulkan::CommandPool& command_pool,
     Array<Vulkan::CommandBuffer>& command_buffers,
     const Vulkan::Buffer& vertex_buffer,
-    const Vulkan::Buffer& index_buffer
+    const Vulkan::Buffer& index_buffer,
+    Array<Vulkan::Buffer>& uniform_buffers
 ) {
     DENTER("resize_swapchain");
 
@@ -272,6 +293,8 @@ void resize_swapchain(
     graphics_pipeline.resize(swapchain, render_pass);
 
     // Re-create the unchanged part of the framebuffers and the command buffers
+    framebuffers.reserve(swapchain.imageviews().size());
+    command_buffers.reserve(swapchain.imageviews().size());
     size_t to_resize = std::min(framebuffers.size(), swapchain.imageviews().size());
     for (size_t i = 0; i < to_resize; i++) {
         framebuffers[i].resize(swapchain.imageviews()[i], swapchain, render_pass);
@@ -286,7 +309,7 @@ void resize_swapchain(
         );
     }
 
-    // Create new framebuffers & command buffers if the new swapchain size is larger
+    // Create new framebuffers, command buffers & uniform buffers if the new swapchain size is larger than before
     for (size_t i = framebuffers.size(); i < swapchain.imageviews().size(); i++) {
         framebuffers.push_back(
             Vulkan::Framebuffer(device, swapchain.imageviews()[i], swapchain, render_pass)
@@ -303,10 +326,46 @@ void resize_swapchain(
             vertex_buffer,
             index_buffer
         );
+        uniform_buffers.push_back(Vulkan::Buffer(
+            device,
+            sizeof(UniformBufferObject),
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        ));
     }
 
     // Finally, reset the window resize state and we're done
     window.reset_resized();
+    DRETURN;
+}
+
+/* Helper function that computes the new transformation matrices s.t. the image will nicely rotate. */
+void update_uniform_buffer(Array<Vulkan::Buffer>& uniform_buffers, const Vulkan::Swapchain& swapchain, uint32_t image_index) {
+    DENTER("update_uniform_buffer");
+
+    // Use a static variable to mark the beginning of the render time (i.e., first time the function is called)
+    static std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    
+    // Compute the time that has passed since then
+    std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+    float time_passed = std::chrono::duration_cast<std::chrono::duration<float>>(now - start).count();
+
+    // Define the translation matrices
+    UniformBufferObject translations{};
+    // First we translate the model to world space; in this case, we rotate it over the Z-axis (last vec) by 90 degrees, depending on the amount of time passed
+    // Since it's the first translation, we start with the unit matrix
+    translations.model = glm::rotate(glm::mat4(1.0f), time_passed * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    // Next, we add the view matrix. It will be lookup straight at the square, but then above and away (2, 2, 2) from 45 degrees down. The up axis is here defined to be the Z-axis.
+    translations.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    // Finally, the projection matrix, which has a field-of-view of 45 degrees and uses the swapchain to keep the aspect ratio equal to the window size.
+    // The final two parameters are the near plane and the far plane; presumably the locations of the near and far 'square' of the camera trapezium
+    translations.proj = glm::perspective(glm::radians(45.0f), (float) swapchain.extent().width / (float) swapchain.extent().height, 0.1f, 10.0f);
+    // Don't forget to flip the Y-axis of the translation matrix, though, as this library is for OpenGL and that uses an inverted Y-axis
+    translations.proj[1][1] *= -1;
+
+    // Next, we update all the uniform buffer for the current image
+    uniform_buffers[image_index].set((void*) &translations, sizeof(UniformBufferObject));
+
     DRETURN;
 }
 
@@ -353,6 +412,9 @@ int main() {
         // Create the swapchain for that device
         Vulkan::Swapchain swapchain(window, device);
 
+        // Create the descriptor layout to bind the uniform buffer for the transformation matrices
+        Vulkan::DescriptorSetLayout descriptor_set_layout(device, VK_SHADER_STAGE_VERTEX_BIT);
+
         // Create our only render pass (for now), and use that to create a graphics pipeline
         Vulkan::RenderPasses::SquarePass render_pass(device, swapchain);
         Vulkan::GraphicsPipelines::SquarePipeline pipeline(device, swapchain, render_pass);
@@ -374,6 +436,16 @@ int main() {
         // Create the index buffer
         Vulkan::Buffer index_buffer(device, sizeof(uint16_t) * indices.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         index_buffer.set_staging((void*) indices.rdata(), sizeof(uint16_t) * indices.size(), command_pool);
+        // Create the uniform buffers for the transformation matrices, one per frame in the framebuffers
+        Array<Vulkan::Buffer> uniform_buffers(swapchain.imageviews().size());
+        for (size_t i = 0; i < swapchain.imageviews().size(); i++) {
+            uniform_buffers.push_back(Vulkan::Buffer(
+                device,
+                sizeof(UniformBufferObject),
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+            ));
+        }
 
         // Create the command buffers for each frame in the swapchain
         Array<Vulkan::CommandBuffer> command_buffers = command_pool.get_buffer(framebuffers.size(), VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -437,7 +509,8 @@ int main() {
                     command_pool,
                     command_buffers,
                     vertex_buffer,
-                    index_buffer
+                    index_buffer,
+                    uniform_buffers
                 );
                 image_ready_semaphores[current_frame].reset();
                 continue;
@@ -448,7 +521,7 @@ int main() {
 
 
 
-            /***** STEP 2: SUBMITTING THE RENDER COMMAND BUFFER *****/
+            /***** STEP 2: UPDATING THE TRANSFORMATION MATRICES *****/
 
             // Wait until the image is not in use either, and not just the frame. Note that this will be skipped if the image isn't retrieved at least once yet
             if (image_in_flight_fences[image_index] != nullptr) {
@@ -456,6 +529,13 @@ int main() {
             }
             // Update the fence to the equivalent frame fence
             image_in_flight_fences[image_index] = frame_in_flight_fences[current_frame];
+
+            // Call our update function
+            update_uniform_buffer(uniform_buffers, swapchain, image_index);
+
+
+
+            /***** STEP 3: SUBMITTING THE RENDER COMMAND BUFFER *****/
 
             // Next, we'll submit the correct command buffer to draw the triangle
             VkSubmitInfo submit_info{};
@@ -484,7 +564,7 @@ int main() {
 
 
 
-            /***** STEP 3: PRESENTING THE FRAME *****/
+            /***** STEP 4: PRESENTING THE FRAME *****/
 
             // With the rendering process scheduled, it's now time to define what happens when that's done
             VkPresentInfoKHR present_info{};
@@ -514,7 +594,8 @@ int main() {
                     command_pool,
                     command_buffers,
                     vertex_buffer,
-                    index_buffer
+                    index_buffer,
+                    uniform_buffers
                 );
                 image_ready_semaphores[current_frame].reset();
                 continue;
@@ -525,7 +606,7 @@ int main() {
 
 
 
-            /***** STEP 4: MOVE TO NEXT FRAME *****/
+            /***** STEP 5: MOVE TO NEXT FRAME *****/
 
             // Once done, update the frame to the next loop
             if (++current_frame >= 3) { current_frame = 0; }

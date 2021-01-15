@@ -54,7 +54,7 @@ namespace HelloVikingRoom::Vulkan {
         /* Move constructor for the Buffer class. */
         Buffer(Buffer&& other);
         /* Destructor for the Buffer class. */
-        ~Buffer();
+        virtual ~Buffer();
 
         /* Returns the appropriate memory type based on the given requirements as stated by a VkBuffer and custom requirements. */
         static uint32_t get_memory_type(const Device& device, uint32_t type_filter, VkMemoryPropertyFlags properties);

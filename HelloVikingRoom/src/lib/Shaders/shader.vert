@@ -5,6 +5,14 @@
  */
 
 #version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+// Specify how an object will look like
+layout(binding = 0) uniform UniformBufferObject {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+} ubo;
 
 // Specify the input we use to get the vertex position
 layout(location = 0) in vec2 vertex_position;
@@ -20,7 +28,7 @@ void main() {
     //   and gl_VertexIndex specifies which vertex we're currently working on.
     //   Note that this means that the program won't work for more than three
     //   shaders!
-    gl_Position = vec4(vertex_position, 0.0, 1.0);
+    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(vertex_position, 0.0, 1.0);
     
     // Also pass the colour on
     fragColor = vertex_color;

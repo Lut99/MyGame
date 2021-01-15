@@ -17,6 +17,7 @@
 
 #include <vulkan/vulkan.h>
 
+#define GLM_FORCE_RADIANS
 #include "glm/glm.hpp"
 #include "Tools/Array.hpp"
 
