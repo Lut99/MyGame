@@ -173,6 +173,68 @@ Array<const char*> trim_layers(const Array<const char*>& to_trim) {
     DRETURN supported_layers;
 }
 
+/* Records the command buffer for a single framebuffer. */
+void record_command_buffer(
+    Vulkan::CommandBuffer& command_buffer,
+    const Vulkan::GraphicsPipeline& graphics_pipeline,
+    const Vulkan::RenderPass& render_pass,
+    const Vulkan::Swapchain& swapchain,
+    const Vulkan::Framebuffer& framebuffer,
+    const Vulkan::Buffer& vertex_buffer,
+    const Vulkan::Buffer& index_buffer
+) {
+    DENTER("record_command_buffer");
+    DLOG(info, "Recording command buffer...");
+
+    // Begin recording
+    command_buffer.begin();
+
+    // First, we'll start a render pass
+    VkRenderPassBeginInfo render_pass_info{};
+    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    // Specify which render pass to begin
+    render_pass_info.renderPass = render_pass;
+    // Tell it which framebuffer to use
+    render_pass_info.framebuffer = framebuffer;
+    // Next, we specify what area to write to (the entire area). This is purely for shaders, and note that this means that the frame will be written to & read from for each shader
+    render_pass_info.renderArea.offset = { 0, 0 };
+    render_pass_info.renderArea.extent = swapchain.extent();
+    // Now we'll specify which color to use when clearing the buffer (which we do when loading it) - it'll be fully black
+    VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+    render_pass_info.clearValueCount = 1;
+    render_pass_info.pClearValues = &clear_color;
+    // Time to start recording it with these configs. The final parameter decides if we execute the parameters in the primary buffer itself (INLINE) or in a secondary buffer.
+    vkCmdBeginRenderPass(command_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    // Next, register the pipeline to use
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline);
+
+    // Now we'll bind the buffers so the GPU knows to use them
+    VkBuffer vertex_buffers[] = { vertex_buffer };
+    VkDeviceSize offsets[] = { 0 };
+    // Note that the command can be used to bind more buffers at once, but we won't do that
+    vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, offsets);
+    // Also bind the index buffer, specifying its type
+    vkCmdBindIndexBuffer(command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT16);
+
+    // We have told it how to start and how to render - all we have to tell it is what to render
+    // Here, we pass the following information:
+    //   - The command buffer that should start drawing
+    //   - How many vertices we'll draw (the size of the global buffer, of course)
+    //   - We don't do instance rendering (whatever that may be), so we pass 1
+    //   - The first index in the vertex buffer, i.e., the lowest value of gl_VertexIndex in the shaders
+    //   - The first index of the instance buffer, i.e., the lowest value of gl_InstanceIndex in the shaders (not used)
+    vkCmdDrawIndexed(command_buffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+
+    // Once it has been drawn, we can end the render pass
+    vkCmdEndRenderPass(command_buffer);
+
+    // End recording
+    command_buffer.end();
+
+    DRETURN;
+}
+
 
 
 
@@ -238,6 +300,21 @@ int main() {
         Vulkan::Buffer index_buffer(device, sizeof(uint16_t) * indices.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         index_buffer.set_staging((void*) indices.rdata(), sizeof(uint16_t) * indices.size(), command_pool);
 
+        // Create the command buffers for each frame in the swapchain
+        Array<Vulkan::CommandBuffer> command_buffers = command_pool.get_buffer(framebuffers.size(), VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        for (size_t i = 0; i < command_buffers.size(); i++) {
+            // Call the helper function to actually record it
+            record_command_buffer(
+                command_buffers[i],
+                pipeline,
+                render_pass,
+                swapchain,
+                framebuffers[i],
+                vertex_buffer,
+                index_buffer
+            );
+        }
+
 
 
         /***** STEP 2: MAIN LOOP *****/
@@ -249,6 +326,9 @@ int main() {
 
 
     } catch (std::exception&) {
+        // Destroy the GLFW library
+        glfwTerminate();
+
         DRETURN EXIT_FAILURE;
     }
 

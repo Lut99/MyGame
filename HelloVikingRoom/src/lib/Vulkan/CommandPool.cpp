@@ -157,34 +157,34 @@ CommandBuffer CommandPool::get_buffer(VkCommandBufferLevel buffer_level) {
     DRETURN CommandBuffer(*this, command_buffer);
 }
 
-// /* Returns N new command buffers at the given level. */
-// Tools::Array<CommandBuffer> CommandPool::get_buffer(uint32_t N, VkCommandBufferLevel buffer_level) {
-//     DENTER("Vulkan::CommandPool::get_buffer(multiple)");
-//     DLOG(info, "Allocating " + std::to_string(N) + " command buffers...");
+/* Returns N new command buffers at the given level. */
+Tools::Array<CommandBuffer> CommandPool::get_buffer(size_t N, VkCommandBufferLevel buffer_level) {
+    DENTER("Vulkan::CommandPool::get_buffer(multiple)");
+    DLOG(info, "Allocating " + std::to_string(N) + " command buffers...");
 
-//     // Prepare a command buffer
-//     VkCommandBufferAllocateInfo alloc_info{};
-//     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-//     // Tell it that this is a primary command buffer, i.e., one that can be invoked by us instead of another command buffer
-//     alloc_info.level = buffer_level;
-//     // The command pool where the buffer will be created
-//     alloc_info.commandPool = this->vk_command_pool;
-//     // Tell it how many buffers to allocate
-//     alloc_info.commandBufferCount = N;
+    // Prepare a command buffer
+    VkCommandBufferAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    // Tell it that this is a primary command buffer, i.e., one that can be invoked by us instead of another command buffer
+    alloc_info.level = buffer_level;
+    // The command pool where the buffer will be created
+    alloc_info.commandPool = this->vk_command_pool;
+    // Tell it how many buffers to allocate
+    alloc_info.commandBufferCount = static_cast<uint32_t>(N);
 
-//     // Actually create them
-//     VkCommandBuffer* command_buffer = new VkCommandBuffer[N];
-//     if (vkAllocateCommandBuffers(this->device, &alloc_info, command_buffer) != VK_SUCCESS) {
-//         DLOG(fatal, "Could not allocate temporary copy command buffer.");
-//     }
+    // Actually create them
+    VkCommandBuffer* command_buffer = new VkCommandBuffer[N];
+    if (vkAllocateCommandBuffers(this->device, &alloc_info, command_buffer) != VK_SUCCESS) {
+        DLOG(fatal, "Could not allocate temporary copy command buffer.");
+    }
 
-//     // Wrap each of them in an array of command buffers
-//     Tools::Array<CommandBuffer> result(N);
-//     for (uint32_t i = 0; i < N; i++) {
-//         result.push_back(CommandBuffer(*this, command_buffer[i]));
-//     }
+    // Wrap each of them in an array of command buffers
+    Tools::Array<CommandBuffer> result(N);
+    for (size_t i = 0; i < N; i++) {
+        result.push_back(CommandBuffer(*this, command_buffer[i]));
+    }
 
-//     // Delete the array of VkCommandBuffer pointers and we're done
-//     delete[] command_buffer;
-//     DRETURN result;
-// }
+    // Delete the array of VkCommandBuffer pointers and we're done
+    delete[] command_buffer;
+    DRETURN result;
+}

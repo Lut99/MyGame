@@ -86,8 +86,8 @@ namespace HelloVikingRoom::Vulkan {
 
         /* Returns a new command buffer at the given level. */
         CommandBuffer get_buffer(VkCommandBufferLevel buffer_level);
-        // /* Returns N new command buffers at the given level. */
-        // Tools::Array<CommandBuffer> get_buffer(uint32_t N, VkCommandBufferLevel buffer_level);
+        /* Returns N new command buffers at the given level. */
+        Tools::Array<CommandBuffer> get_buffer(size_t N, VkCommandBufferLevel buffer_level);
 
         /* Explicitly returns the internal VkCommandPool object. */
         inline VkCommandPool command_pool() const { return this->vk_command_pool; }

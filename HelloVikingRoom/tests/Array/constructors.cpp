@@ -105,6 +105,17 @@ public:
 };
 
 
+/***** HELPER FUNCTION *****/
+template <class T, typename = std::enable_if_t<std::is_base_of<Value, T>::value> >
+Array<T> populate(int N) {
+    Array<T> result(N);
+    for (int i = 0; i < N; i++) {
+        result.push_back(T(i));
+    }
+    return result;
+}
+
+
 /***** TESTS *****/
 /* First test, that checks if a missing default constructor works. */
 static bool test_nodefault() {
@@ -116,6 +127,15 @@ static bool test_nodefault() {
     for (size_t i = 0; i < test2.size(); i++) {
         if (test2[i].get_value() != i + 1) {
             ERROR("Constructing without default failed; expected " + std::to_string(i + 1) + ", got " + std::to_string(test2[i].get_value()));
+            ENDCASE(false);
+        }
+    }
+
+    // Also do the through-function test
+    Array<NoDefault> test3 = populate<NoDefault>(3);
+    for (size_t i = 0; i < 3; i++) {
+        if (test3[i].get_value() != i) {
+            ERROR("Constructing without default through populate failed; expected " + std::to_string(i) + ", got " + std::to_string(test3[i].get_value()));
             ENDCASE(false);
         }
     }
@@ -139,6 +159,15 @@ static bool test_nocopy() {
         }
     }
 
+    // Also do the through-function test
+    Array<NoDefault> test2 = populate<NoDefault>(3);
+    for (size_t i = 0; i < 3; i++) {
+        if (test2[i].get_value() != i) {
+            ERROR("Constructing without copy through populate failed; expected " + std::to_string(i) + ", got " + std::to_string(test2[i].get_value()));
+            ENDCASE(false);
+        }
+    }
+
     cout << "  ";
     ENDCASE(true);
 }
@@ -152,6 +181,15 @@ static bool test_nomove() {
     for (size_t i = 0; i < test.size(); i++) {
         if (test[i].get_value() != i + 1) {
             ERROR("Constructing without copy failed; expected " + std::to_string(i + 1) + ", got " + std::to_string(test[i].get_value()));
+            ENDCASE(false);
+        }
+    }
+
+    // Also do the through-function test
+    Array<NoDefault> test2 = populate<NoDefault>(3);
+    for (size_t i = 0; i < 3; i++) {
+        if (test2[i].get_value() != i) {
+            ERROR("Constructing without move through populate failed; expected " + std::to_string(i) + ", got " + std::to_string(test2[i].get_value()));
             ENDCASE(false);
         }
     }
@@ -171,6 +209,15 @@ static bool test_nodefaultnocopy() {
     for (size_t i = 0; i < test.size(); i++) {
         if (test[i].get_value() != i + 1) {
             ERROR("Constructing without copy failed; expected " + std::to_string(i + 1) + ", got " + std::to_string(test[i].get_value()));
+            ENDCASE(false);
+        }
+    }
+
+    // Also do the through-function test
+    Array<NoDefault> test2 = populate<NoDefault>(3);
+    for (size_t i = 0; i < 3; i++) {
+        if (test2[i].get_value() != i) {
+            ERROR("Constructing without default & copy through populate failed; expected " + std::to_string(i) + ", got " + std::to_string(test2[i].get_value()));
             ENDCASE(false);
         }
     }
@@ -205,6 +252,15 @@ static bool test_nodefaultnomove() {
     for (size_t i = 0; i < test.size(); i++) {
         if (test[i].get_value() != i + 1) {
             ERROR("Constructing without copy failed; expected " + std::to_string(i + 1) + ", got " + std::to_string(test[i].get_value()));
+            ENDCASE(false);
+        }
+    }
+
+    // Also do the through-function test
+    Array<NoDefault> test2 = populate<NoDefault>(3);
+    for (size_t i = 0; i < 3; i++) {
+        if (test2[i].get_value() != i) {
+            ERROR("Constructing without default & move through populate failed; expected " + std::to_string(i) + ", got " + std::to_string(test2[i].get_value()));
             ENDCASE(false);
         }
     }

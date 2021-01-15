@@ -127,7 +127,7 @@ namespace Tools {
         /* Copy constructor for the Array class. Note that this only works if the Array's element has a copy constructor defined. */
         Array(const Array& other): Array<T, true, true>(other) {}
         /* Move constructor for the Array class. */
-        Array(Array&& other): Array<T, true, true, true>(other) {};
+        Array(Array&& other): Array<T, true, true, true>(std::move(other)) {};
         /* Destructor for the Array class. */
         ~Array() {}
 
@@ -155,7 +155,7 @@ namespace Tools {
         /* Copy constructor for the Array class. Deleted, since the chosen type does not support copy constructing. */
         Array(const Array& other) = delete;
         /* Move constructor for the Array class. */
-        Array(Array&& other): Array<T, true, true, true>(other) {};
+        Array(Array&& other): Array<T, true, true, true>(std::move(other)) {};
         /* Destructor for the Array class. */
         ~Array() {}
         
@@ -191,7 +191,7 @@ namespace Tools {
         /* Copy constructor for the Array class. Note that this only works if the Array's element has a copy constructor defined. */
         Array(const Array& other): Array<T, true, true>(other) {}
         /* Move constructor for the Array class. */
-        Array(Array&& other): Array<T, true, true, true>(other) {};
+        Array(Array&& other): Array<T, true, true, true>(std::move(other)) {};
         /* Destructor for the Array class. */
         ~Array() {}
 
@@ -221,7 +221,7 @@ namespace Tools {
         /* Copy constructor for the Array class. Note that this only works if the Array's element has a copy constructor defined. */
         Array(const Array& other) = delete;
         /* Move constructor for the Array class. */
-        Array(Array&& other): Array<T, true, true, true>(other) {};
+        Array(Array&& other): Array<T, true, true, true>(std::move(other)) {};
         /* Destructor for the Array class. */
         ~Array() {}
 
@@ -260,7 +260,7 @@ namespace Tools {
         /* Copy constructor for the Array class. Note that this only works if the Array's element has a copy constructor defined. */
         Array(const Array& other): Array<T, true, true>(other) {}
         /* Move constructor for the Array class. */
-        Array(Array&& other): Array<T, true, true, true>(other) {};
+        Array(Array&& other): Array<T, true, true, true>(std::move(other)) {};
         /* Destructor for the Array class. */
         ~Array() {}
 
@@ -293,7 +293,7 @@ namespace Tools {
         /* Copy constructor for the Array class. Note that this only works if the Array's element has a copy constructor defined. */
         Array(const Array& other) = delete;
         /* Move constructor for the Array class. */
-        Array(Array&& other): Array<T, true, true, true>(other) {}
+        Array(Array&& other): Array<T, true, true, true>(std::move(other)) {}
         /* Destructor for the Array class. */
         ~Array() {}
 
@@ -323,7 +323,7 @@ namespace Tools {
         /* Copy constructor for the Array class. Note that this only works if the Array's element has a copy constructor defined. */
         Array(const Array& other) = delete;
         /* Move constructor for the Array class. */
-        Array(Array&& other): Array<T, true, true, true>(other) {}
+        Array(Array&& other): Array<T, true, true, true>(std::move(other)) {}
         /* Destructor for the Array class. */
         ~Array() {}
 
