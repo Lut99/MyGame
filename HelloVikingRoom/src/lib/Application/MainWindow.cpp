@@ -96,7 +96,6 @@ MainWindow::~MainWindow() {
 /* Function that is called when the window resizes. */
 void MainWindow::GLFW_resize_callback(GLFWwindow* window, int new_width, int new_height){
     DENTER("MainWindow::GLFW_resize_callback");
-    DLOG(info, "Called for a window resize");
 
     // Get a reference to our class
     MainWindow* main_window = reinterpret_cast<MainWindow*>(glfwGetWindowUserPointer(window));

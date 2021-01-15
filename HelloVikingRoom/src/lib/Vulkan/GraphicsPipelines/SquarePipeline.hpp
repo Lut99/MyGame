@@ -34,7 +34,7 @@ namespace HelloVikingRoom::Vulkan::GraphicsPipelines {
         virtual ~SquarePipeline();
 
         /* Virtual function to re-create the pipeline, based on the internally stored structs. Takes a render pass to render in this pipeline */
-        virtual void regenerate(const RenderPass& render_pass);
+        virtual void resize(const Swapchain& swapchain, const RenderPass& render_pass);
 
     };
 }

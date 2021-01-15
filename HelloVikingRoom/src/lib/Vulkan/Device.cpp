@@ -297,3 +297,27 @@ VkPhysicalDevice Device::pick_gpu(const Instance& instance, const VkSurfaceKHR& 
     DLOG(fatal, "Could not find a suitable GPU");
     DRETURN nullptr;
 }
+
+
+
+/* Refreshes the internal DeviceQueueInfo and DeviceSwapchainInfo. */
+void Device::refresh_info(const MainWindow& window) {
+    DENTER("Vulkan::Device::refresh_info");
+
+    // Simply re-create the structs
+    delete this->queue_info;
+    delete this->swapchain_info;
+    this->queue_info = new DeviceQueueInfo(this->vk_physical_device, window.surface());
+    this->swapchain_info = new DeviceSwapchainInfo(this->vk_physical_device, window.surface());
+
+    DRETURN;
+}
+
+/* Waits until the device is idle. */
+void Device::wait_idle() const {
+    DENTER("Vulkan::Device::wait_idle");
+
+    vkDeviceWaitIdle(this->vk_device);
+
+    DRETURN;
+}

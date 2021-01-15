@@ -16,6 +16,7 @@
 #ifndef VULKAN_DEVICE_HPP
 #define VULKAN_DEVICE_HPP
 
+#include "Application/MainWindow.hpp"
 #include "Vulkan/Instance.hpp"
 
 namespace HelloVikingRoom::Vulkan {
@@ -116,6 +117,11 @@ namespace HelloVikingRoom::Vulkan {
         static bool is_suitable_gpu(const VkPhysicalDevice& physical_device, const VkSurfaceKHR& surface, const Array<const char*>& device_extensions);
         /* Static function that helps selecting the correct GPU. */
         static VkPhysicalDevice pick_gpu(const Instance& instance, const VkSurfaceKHR& surface, const Array<const char*>& device_extensions);
+
+        /* Refreshes the internal DeviceQueueInfo and DeviceSwapchainInfo. */
+        void refresh_info(const MainWindow& window);
+        /* Waits until the device is idle. */
+        void wait_idle() const;
 
         /* Returns the name of the selected GPU. */
         inline std::string name() const { return this->gpu_name; }

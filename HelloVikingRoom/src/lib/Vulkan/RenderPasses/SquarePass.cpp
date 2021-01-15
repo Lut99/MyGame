@@ -33,8 +33,6 @@ SquarePass::SquarePass(const Device& device, const Swapchain& swapchain) :
 
     // Start by defining the VkAttachementDescription. We only have one framebuffer with one image, so we also only need one attachment
     this->vk_attachments.push_back({});
-    // The format is the format of our image
-    this->vk_attachments[0].format = swapchain.format();
     // We don't do multisampling (yet)
     this->vk_attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
     // We define what we want to do with the frame when we load it; clear it with a constant (since we'll be adding alphas to it)
@@ -79,7 +77,7 @@ SquarePass::SquarePass(const Device& device, const Swapchain& swapchain) :
     this->vk_subpasses_dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
     // Use our internal regeneration function to do the final steps
-    this->regenerate();
+    this->resize(swapchain);
 
     // Done!
     DLEAVE;
@@ -100,13 +98,16 @@ SquarePass::~SquarePass() {
 
 
 /* Virtual function that re-generates the RenderPass from the internal structs. Assumes the device is not currently using this RenderPass. */
-void SquarePass::regenerate() {
-    DENTER("Vulkan::RenderPasses::SquarePass::regenerate");
+void SquarePass::resize(const Swapchain& swapchain) {
+    DENTER("Vulkan::RenderPasses::SquarePass::resize");
 
     // Destroy the old one if there is one
     if (this->vk_render_pass != nullptr) {
         vkDestroyRenderPass(this->device, this->vk_render_pass, nullptr);
     }
+
+    // Update the format of the window in the render pass
+    this->vk_attachments[0].format = swapchain.format();
 
     // Create the create info for this pass
     VkRenderPassCreateInfo render_pass_info{};

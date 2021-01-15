@@ -17,7 +17,6 @@
 #ifndef VULKAN_RENDERPASS_SQUARE_PASS_HPP
 #define VULKAN_RENDERPASS_SQUARE_PASS_HPP
 
-#include "Vulkan/Swapchain.hpp"
 #include "Vulkan/RenderPass.hpp"
 
 namespace HelloVikingRoom::Vulkan::RenderPasses {
@@ -34,7 +33,7 @@ namespace HelloVikingRoom::Vulkan::RenderPasses {
         virtual ~SquarePass();
 
         /* Virtual function that re-generates the RenderPass from the internal structs. Assumes the device is not currently using this RenderPass. */
-        virtual void regenerate();
+        virtual void resize(const Swapchain& swapchain);
 
     };
 }

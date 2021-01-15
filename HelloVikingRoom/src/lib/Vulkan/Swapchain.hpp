@@ -41,6 +41,12 @@ namespace HelloVikingRoom::Vulkan {
     public:
         /* The device that this Swapchain is created on. */
         const Device& device;
+        /* The VkSwapchainCreateInfoKHR struct used to initialize (and later quickly resize) the internal VkSwapchainKHR object. */
+        VkSwapchainCreateInfoKHR vk_swapchain_info;
+        /* The VkImageViewCreateInfo struct used to create (and later quickly resize) the imageviews to the images of the Swapchain. */
+        VkImageViewCreateInfo vk_imageview_info;
+        /* The queue indices that are used by this swapchain. */
+        Tools::Array<uint32_t> vk_queue_indices;
 
 
         /* Constructor for the Swapchain class, which takes the main window and a device to create the swapchain from. */
@@ -58,6 +64,9 @@ namespace HelloVikingRoom::Vulkan {
         static VkPresentModeKHR select_present_mode(const Device& device);
         /* Selects the appropriate swapchain resolution based on the capabilities of the given window and the chosen device. */
         static VkExtent2D select_resolution(const MainWindow& window, const Device& device);
+
+        /* Regenerates the swapchain based on the new size of the given window. */
+        void resize(const MainWindow& window);
 
         /* Explicitly returns a constant reference the images inside the Swapchain. */
         inline const Tools::Array<VkImage>& images() const { return this->vk_images; }

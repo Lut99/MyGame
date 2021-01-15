@@ -46,7 +46,7 @@ namespace HelloVikingRoom::Vulkan {
         ~Framebuffer();
 
         /* Regenerates the Framebuffer based on the internal create info. */
-        void regenerate();
+        void resize(const VkImageView& image_view, const Swapchain& swapchain, const RenderPass& render_pass);
 
         /* Expliticly returns the internal VkFramebuffer object. */
         inline VkFramebuffer framebuffer() const { return this->vk_framebuffer; }

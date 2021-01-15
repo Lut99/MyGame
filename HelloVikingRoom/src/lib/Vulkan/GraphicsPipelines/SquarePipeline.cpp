@@ -84,10 +84,6 @@ SquarePipeline::SquarePipeline(const Device& device, const Swapchain& swapchain,
     this->vk_viewports[0].x = 0.0f;
     // ...top corner...
     this->vk_viewports[0].y = 0.0f;
-    // ...and continue to the right...
-    this->vk_viewports[0].width = (float) swapchain.extent().width;
-    // ...bottom of the viewport
-    this->vk_viewports[0].height = (float) swapchain.extent().height;
     // Then, set the minimum depth to the standard value of 0.0
     this->vk_viewports[0].minDepth = 0.0f;
     // And the maximum depth to the standard value of 1.0
@@ -97,8 +93,6 @@ SquarePipeline::SquarePipeline(const Device& device, const Swapchain& swapchain,
     this->vk_scissor_rects.push_back({});
     // No type either, instead we immediately set the xy
     this->vk_scissor_rects[0].offset = { 0, 0 };
-    // And then the size of the rectangle
-    this->vk_scissor_rects[0].extent = swapchain.extent();
 
     // We'll now combine the viewport and scissor into a viewport state. Note that multiple viewports can be used on some cards, but we'll use just one
     this->vk_viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -197,7 +191,7 @@ SquarePipeline::SquarePipeline(const Device& device, const Swapchain& swapchain,
 
 
     /* Finally, leave the pipeline creation to our regenerate() function. */
-    this->regenerate(render_pass);
+    this->resize(swapchain, render_pass);
 
     DLEAVE;
 }
@@ -217,8 +211,18 @@ SquarePipeline::~SquarePipeline() {
 
 
 /* Virtual function to re-create the pipeline, based on the internally stored structs. Takes a render pass to render in this pipeline */
-void SquarePipeline::regenerate(const RenderPass& render_pass) {
-    DENTER("Vulkan::GraphicsPipelines::SquarePipeline::regenerate");
+void SquarePipeline::resize(const Swapchain& swapchain, const RenderPass& render_pass) {
+    DENTER("Vulkan::GraphicsPipelines::SquarePipeline::resize");
+    
+    // Remove the old graphics pipeline if it exists
+    if (this->vk_pipeline != nullptr) {
+        vkDestroyPipeline(this->device, this->vk_pipeline, nullptr);
+    }
+
+    // Update the relevant create structs to incorporate the swapchain changes
+    this->vk_viewports[0].width = (float) swapchain.extent().width;
+    this->vk_viewports[0].height = (float) swapchain.extent().height;
+    this->vk_scissor_rects[0].extent = swapchain.extent();
 
     // We start, as always, by defining the struct
     VkGraphicsPipelineCreateInfo pipeline_info{};

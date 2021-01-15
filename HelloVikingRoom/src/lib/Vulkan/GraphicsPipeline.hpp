@@ -76,8 +76,8 @@ namespace HelloVikingRoom::Vulkan {
         /* Destructor for the GraphicsPipeline class. */
         virtual ~GraphicsPipeline();
 
-        /* Virtual function to re-create the pipeline, based on the internally stored structs. Takes a render pass to render in this pipeline */
-        virtual void regenerate(const RenderPass& render_pass) = 0;
+        /* Virtual function to re-create the pipeline, based on the internally stored structs. Takes a render pass to render in this pipeline. */
+        virtual void resize(const Swapchain& swapchain, const RenderPass& render_pass) = 0;
 
         /* Explicitly returns the internal GraphicsPipeline object. */
         inline VkPipeline pipeline() const { return this->vk_pipeline; }

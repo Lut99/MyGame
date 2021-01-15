@@ -25,6 +25,7 @@ using namespace Debug::SeverityValues;
 /***** FRAMEBUFFER CLASS *****/
 /* Constructor for the Framebuffer class, which takes a Device where the framebuffer lives, a Swapchain's ImageView to bind to, the extend of the Swapchain's ImageView and a RenderPass to bind the framebuffer to. */
 Framebuffer::Framebuffer(const Device& device, const VkImageView& image_view, const Swapchain& swapchain, const RenderPass& render_pass) :
+    vk_framebuffer(nullptr),
     device(device),
     create_info({})
 {
@@ -33,19 +34,11 @@ Framebuffer::Framebuffer(const Device& device, const VkImageView& image_view, co
 
     // Prepare the create info struct
     this->create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    // Link a renderpass to this framebuffer
-    this->create_info.renderPass = render_pass;
-    // Attach the imageviews
-    this->create_info.attachmentCount = 1;
-    this->create_info.pAttachments = &image_view;
-    // Specify the size of the framebuffer (i.e., the size of the imageviews)
-    this->create_info.width = swapchain.extent().width;
-    this->create_info.height = swapchain.extent().height;
     // Specify how many layers there are in this image (again, will likely always be 1)
     this->create_info.layers = 1;
 
     // Use the regenerate function to actually create it
-    this->regenerate();
+    this->resize(image_view, swapchain, render_pass);
 
     DLEAVE;
 }
@@ -74,8 +67,23 @@ Framebuffer::~Framebuffer() {
 
 
 /* Regenerates the Framebuffer based on the internal create info. */
-void Framebuffer::regenerate() {
-    DENTER("Vulkan::Framebuffer::regenerate");
+void Framebuffer::resize(const VkImageView& image_view, const Swapchain& swapchain, const RenderPass& render_pass) {
+    DENTER("Vulkan::Framebuffer::resize");
+
+    // Delete any pre-existing framebuffers
+    if (this->vk_framebuffer != nullptr) {
+        vkDestroyFramebuffer(this->device, this->vk_framebuffer, nullptr);
+    }
+
+    // Update the create info structs to incorporate the changes
+    // Link a renderpass to this framebuffer
+    this->create_info.renderPass = render_pass;
+    // Attach the imageviews
+    this->create_info.attachmentCount = 1;
+    this->create_info.pAttachments = &image_view;
+    // Specify the size of the framebuffer (i.e., the size of the imageviews)
+    this->create_info.width = swapchain.extent().width;
+    this->create_info.height = swapchain.extent().height;
 
     // Simply create it using our internal struct
     if (vkCreateFramebuffer(this->device, &this->create_info, nullptr, &this->vk_framebuffer) != VK_SUCCESS) {

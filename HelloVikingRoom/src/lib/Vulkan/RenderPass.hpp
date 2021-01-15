@@ -18,7 +18,8 @@
 
 #include <vulkan/vulkan.h>
 
-#include "Device.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/Swapchain.hpp"
 #include "Tools/Array.hpp"
 
 namespace HelloVikingRoom::Vulkan {
@@ -52,7 +53,7 @@ namespace HelloVikingRoom::Vulkan {
         virtual ~RenderPass();
 
         /* Virtual function that re-generates the RenderPass from the internal structs. Assumes the device is not currently using this RenderPass. */
-        virtual void regenerate() = 0;
+        virtual void resize(const Swapchain& swapchain) = 0;
 
         /* Explicitly retrieves a constant refrence to the internal VkRenderPass object. */
         inline VkRenderPass render_pass() const { return this->vk_render_pass; }

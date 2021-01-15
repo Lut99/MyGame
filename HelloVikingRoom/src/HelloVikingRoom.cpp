@@ -19,7 +19,7 @@
 #include <vulkan/vulkan.h>
 #include <iostream>
 #include <exception>
-#include <array>
+#include <algorithm>
 
 #include "Vertices/Vertex.hpp"
 #include "Vulkan/Instance.hpp"
@@ -29,6 +29,8 @@
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Buffer.hpp"
+#include "Vulkan/Semaphore.hpp"
+#include "Vulkan/Fence.hpp"
 #include "Vulkan/RenderPasses/SquarePass.hpp"
 #include "Vulkan/GraphicsPipelines/SquarePipeline.hpp"
 #include "Application/MainWindow.hpp"
@@ -53,13 +55,14 @@ const Array<const char*> required_layers = {
 
 /* List of the vertices used for drawing the square. */
 const Array<Vertex> vertices = {
-    Vertex(glm::vec2(0.0f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f)),
-    Vertex(glm::vec2(0.5f, 0.5f), glm::vec3(0.0f, 1.0f, 0.0f)),
-    Vertex(glm::vec2(-0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f))
+    Vertex(glm::vec2(-0.5f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f)),
+    Vertex(glm::vec2(0.5f, -0.5f), glm::vec3(0.0f, 1.0f, 0.0f)),
+    Vertex(glm::vec2(0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f)),
+    Vertex(glm::vec2(-0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f))
 };
 /* Index buffer for the vertices. */
 const Array<uint16_t> indices = {
-    0, 1, 2
+    0, 1, 2, 2, 3, 0
 };
 
 
@@ -235,6 +238,78 @@ void record_command_buffer(
     DRETURN;
 }
 
+/* Helper function that resizes the swapchain and classes that (indirectly) use it. */
+void resize_swapchain(
+    MainWindow& window,
+    Vulkan::Device& device,
+    Vulkan::Swapchain& swapchain,
+    Vulkan::RenderPass& render_pass,
+    Vulkan::GraphicsPipeline& graphics_pipeline,
+    Array<Vulkan::Framebuffer>& framebuffers,
+    Vulkan::CommandPool& command_pool,
+    Array<Vulkan::CommandBuffer>& command_buffers,
+    const Vulkan::Buffer& vertex_buffer,
+    const Vulkan::Buffer& index_buffer
+) {
+    DENTER("resize_swapchain");
+
+    // Wait until we're not minimized, i.e., the size is something other than 0x0
+    int window_width = 0, window_height = 0;
+    glfwGetFramebufferSize(window, &window_width, &window_height);
+    while (window_width == 0 || window_height == 0) {
+        // Simply wait until the next event
+        window.do_events();
+        glfwGetFramebufferSize(window, &window_width, &window_height);
+    }
+
+    // Next, wait until the device is idle before we re-create half of it
+    device.wait_idle();
+
+    // Now, re-create the swapchain, render pass and graphics pipeline
+    device.refresh_info(window);
+    swapchain.resize(window);
+    render_pass.resize(swapchain);
+    graphics_pipeline.resize(swapchain, render_pass);
+
+    // Re-create the unchanged part of the framebuffers and the command buffers
+    size_t to_resize = std::min(framebuffers.size(), swapchain.imageviews().size());
+    for (size_t i = 0; i < to_resize; i++) {
+        framebuffers[i].resize(swapchain.imageviews()[i], swapchain, render_pass);
+        record_command_buffer(
+            command_buffers[i],
+            graphics_pipeline,
+            render_pass,
+            swapchain,
+            framebuffers[i],
+            vertex_buffer,
+            index_buffer
+        );
+    }
+
+    // Create new framebuffers & command buffers if the new swapchain size is larger
+    for (size_t i = framebuffers.size(); i < swapchain.imageviews().size(); i++) {
+        framebuffers.push_back(
+            Vulkan::Framebuffer(device, swapchain.imageviews()[i], swapchain, render_pass)
+        );
+        command_buffers.push_back(
+            command_pool.get_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
+        );
+        record_command_buffer(
+            command_buffers[i],
+            graphics_pipeline,
+            render_pass,
+            swapchain,
+            framebuffers[i],
+            vertex_buffer,
+            index_buffer
+        );
+    }
+
+    // Finally, reset the window resize state and we're done
+    window.reset_resized();
+    DRETURN;
+}
+
 
 
 
@@ -291,7 +366,7 @@ int main() {
         }
 
         // Create the command pool for all graphics queues
-        Vulkan::CommandPool command_pool(device, device.get_queue_info().graphics());
+        Vulkan::CommandPool command_pool(device, device.get_queue_info().graphics(), VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
         // Create the vertex buffer
         Vulkan::Buffer vertex_buffer(device, sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -315,15 +390,149 @@ int main() {
             );
         }
 
+        // Finally, prepare the synchronization objects
+        // Signals if an image is ready for drawing
+        Array<Vulkan::Semaphore> image_ready_semaphores(framebuffers.size());
+        // Signals if an image is done with being rendered to
+        Array<Vulkan::Semaphore> image_rendered_semaphores(framebuffers.size());
+        // Fence that determines if a swapchain framebuffer is available or not
+        Array<std::shared_ptr<Vulkan::Fence>> frame_in_flight_fences(framebuffers.size());
+        // Fence that determines if a swapchain image is available or not. Is the exact copy of a frame_in_flight_fence.
+        Array<std::shared_ptr<Vulkan::Fence>> image_in_flight_fences(framebuffers.size());
+        for (size_t i = 0; i < framebuffers.size(); i++) {
+            image_ready_semaphores.push_back(Vulkan::Semaphore(device));
+            image_rendered_semaphores.push_back(Vulkan::Semaphore(device));
+            frame_in_flight_fences.push_back(std::shared_ptr<Vulkan::Fence>(new Vulkan::Fence(device)));
+            image_in_flight_fences.push_back(nullptr);
+        }
+
 
 
         /***** STEP 2: MAIN LOOP *****/
         DLOG(info, "Running main loop...");
+        size_t current_frame = 0;
         while (!window.done()) {
+            // Handle any window events (like resizing, ending, etc)
             window.do_events();
+
+
+
+            /***** STEP 1: GETTING AN IMAGE *****/
+
+            // Wait until our current frame is done with the previous render pass
+            frame_in_flight_fences[current_frame]->wait();
+
+            // Next, we'll get a "new" image from the swapchain. We pass it an image_ready semaphore to keep track of when it's ready, and this is also where we handle window resizes
+            uint32_t image_index;
+            VkResult get_image_result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, image_ready_semaphores[current_frame], VK_NULL_HANDLE, &image_index);
+            if (get_image_result == VK_ERROR_OUT_OF_DATE_KHR || get_image_result == VK_SUBOPTIMAL_KHR || window.resized()) {
+                // The window changed size
+                resize_swapchain(
+                    window,
+                    device,
+                    swapchain,
+                    render_pass,
+                    pipeline,
+                    framebuffers,
+                    command_pool,
+                    command_buffers,
+                    vertex_buffer,
+                    index_buffer
+                );
+                image_ready_semaphores[current_frame].reset();
+                continue;
+            } else if (get_image_result != VK_SUCCESS) {
+                // We failed getting an image
+                DLOG(fatal, "Failed to get image from swapchain.");
+            }
+
+
+
+            /***** STEP 2: SUBMITTING THE RENDER COMMAND BUFFER *****/
+
+            // Wait until the image is not in use either, and not just the frame. Note that this will be skipped if the image isn't retrieved at least once yet
+            if (image_in_flight_fences[image_index] != nullptr) {
+                vkWaitForFences(device, 1, &image_in_flight_fences[image_index]->fence(), VK_TRUE, UINT64_MAX);
+            }
+            // Update the fence to the equivalent frame fence
+            image_in_flight_fences[image_index] = frame_in_flight_fences[current_frame];
+
+            // Next, we'll submit the correct command buffer to draw the triangle
+            VkSubmitInfo submit_info{};
+            submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            // Pass it the semaphores to wait for before starting the command buffer, telling it at which stage in the pipeline to do the waiting
+            VkSemaphore wait_semaphores[] = { image_ready_semaphores[current_frame] };
+            VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+            submit_info.waitSemaphoreCount = 1;
+            submit_info.pWaitSemaphores = wait_semaphores;
+            submit_info.pWaitDstStageMask = wait_stages;
+            // Next, define the command buffer to use
+            submit_info.commandBufferCount = 1;
+            submit_info.pCommandBuffers = &(command_buffers[image_index].command_buffer());
+            // Now we tell it which semaphore to signal once the command buffer is actually done processing
+            VkSemaphore signal_semaphores[] = { image_rendered_semaphores[current_frame] };
+            submit_info.signalSemaphoreCount = 1;
+            submit_info.pSignalSemaphores = signal_semaphores;
+            // Reset this frame's fence, so that we signal it's in use again
+            vkResetFences(device, 1, &frame_in_flight_fences[current_frame]->fence());
+
+            // Now that's done, submit the command buffer to the queue!
+            // Note that we use the fence to be able to say if this frame was done or not, and that we may schedule more than one command buffers at once
+            if (vkQueueSubmit(device.graphics_queue(), 1, &submit_info, *frame_in_flight_fences[current_frame]) != VK_SUCCESS) {
+                DLOG(fatal, "Could not submit command buffer to the graphics queue.");
+            }
+
+
+
+            /***** STEP 3: PRESENTING THE FRAME *****/
+
+            // With the rendering process scheduled, it's now time to define what happens when that's done
+            VkPresentInfoKHR present_info{};
+            present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            // Let it specify which semaphore to wait for until beginning
+            present_info.waitSemaphoreCount = 1;
+            present_info.pWaitSemaphores = signal_semaphores;
+            // Next, define which swapchain we'll present which image to
+            VkSwapchainKHR swap_chains[] = { swapchain };
+            present_info.swapchainCount = 1;
+            present_info.pSwapchains = swap_chains;
+            present_info.pImageIndices = &image_index;
+            // If we're writing to multiple swapchains, we can use this pointer to let us get a list of results for each of them
+            present_info.pResults = nullptr;
+
+            // Let's present it!
+            VkResult present_result = vkQueuePresentKHR(device.presentation_queue(), &present_info);
+            if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR || window.resized()) {
+                // The window changed size
+                resize_swapchain(
+                    window,
+                    device,
+                    swapchain,
+                    render_pass,
+                    pipeline,
+                    framebuffers,
+                    command_pool,
+                    command_buffers,
+                    vertex_buffer,
+                    index_buffer
+                );
+                image_ready_semaphores[current_frame].reset();
+                continue;
+            } else if (present_result != VK_SUCCESS) {
+                // We failed
+                DLOG(info, "Could not submit resulting image to the presentation queue");
+            }
+
+
+
+            /***** STEP 4: MOVE TO NEXT FRAME *****/
+
+            // Once done, update the frame to the next loop
+            if (++current_frame >= 3) { current_frame = 0; }
         }
 
-
+        // Once done with the main loop, be sure to wait until the device is ready as well
+        device.wait_idle();
 
     } catch (std::exception&) {
         // Destroy the GLFW library
