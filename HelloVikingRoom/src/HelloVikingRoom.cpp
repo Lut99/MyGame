@@ -21,11 +21,14 @@
 #include <exception>
 #include <array>
 
+#include "Vertices/Vertex.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Debugger.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Swapchain.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/CommandPool.hpp"
+#include "Vulkan/Buffer.hpp"
 #include "Vulkan/RenderPasses/SquarePass.hpp"
 #include "Vulkan/GraphicsPipelines/SquarePipeline.hpp"
 #include "Application/MainWindow.hpp"
@@ -44,8 +47,19 @@ const Array<const char*> device_extensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 /* List of validation layers that we want to be enabled. */
-const  Array<const char*> required_layers = {
+const Array<const char*> required_layers = {
     "VK_LAYER_KHRONOS_validation"
+};
+
+/* List of the vertices used for drawing the square. */
+const Array<Vertex> vertices = {
+    Vertex(glm::vec2(0.0f, -0.5f), glm::vec3(1.0f, 0.0f, 0.0f)),
+    Vertex(glm::vec2(0.5f, 0.5f), glm::vec3(0.0f, 1.0f, 0.0f)),
+    Vertex(glm::vec2(-0.5f, 0.5f), glm::vec3(0.0f, 0.0f, 1.0f))
+};
+/* Index buffer for the vertices. */
+const Array<uint16_t> indices = {
+    0, 1, 2
 };
 
 
@@ -213,6 +227,16 @@ int main() {
                 Vulkan::Framebuffer(device, swapchain.imageviews()[i], swapchain, render_pass)
             );
         }
+
+        // Create the command pool for all graphics queues
+        Vulkan::CommandPool command_pool(device, device.get_queue_info().graphics());
+
+        // Create the vertex buffer
+        Vulkan::Buffer vertex_buffer(device, sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        vertex_buffer.set_staging((void*) vertices.rdata(), sizeof(Vertex) * vertices.size(), command_pool);
+        // Create the index buffer
+        Vulkan::Buffer index_buffer(device, sizeof(uint16_t) * indices.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        index_buffer.set_staging((void*) indices.rdata(), sizeof(uint16_t) * indices.size(), command_pool);
 
 
 

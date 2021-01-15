@@ -145,12 +145,12 @@ void Buffer::copy(Buffer& destination, const Buffer& source, const CommandPool& 
     if (destination.size() < source.size()) {
         DLOG(fatal, "Destination buffer is not large enough to receive the source buffer.");
     }
-    if (!(destination.usage() & VK_BUFFER_USAGE_TRANSFER_DST_BIT)) {
-        DLOG(fatal, "Destination buffer does not have the VK_BUFFER_USAGE_TRANSFER_DST_BIT set.");
-    }
-    if (!(source.usage() & VK_BUFFER_USAGE_TRANSFER_SRC_BIT)) {
-        DLOG(fatal, "Destination buffer does not have the VK_BUFFER_USAGE_TRANSFER_DST_BIT set.");
-    }
+    // if (!(destination.usage() & VK_BUFFER_USAGE_TRANSFER_DST_BIT)) {
+    //     DLOG(fatal, "Destination buffer does not have the VK_BUFFER_USAGE_TRANSFER_DST_BIT set.");
+    // }
+    // if (!(source.usage() & VK_BUFFER_USAGE_TRANSFER_SRC_BIT)) {
+    //     DLOG(fatal, "Destination buffer does not have the VK_BUFFER_USAGE_TRANSFER_SRC_BIT set.");
+    // }
 
     // Prepare a command buffer that we'll use once to preform the copy
     VkCommandBufferAllocateInfo alloc_info{};
@@ -204,6 +204,110 @@ void Buffer::copy(Buffer& destination, const Buffer& source, const CommandPool& 
 
     // Now we're done, free the command buffer since we won't need it anymore
     vkFreeCommandBuffers(destination.device, command_pool, 1, &command_buffer);
+
+    DLEAVE;
+}
+
+/* Populates the buffer directly, by mapping the appropriate device memory to host memory and then copying the data in the given array. Note that to do this, this array must have VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT set. */
+void Buffer::set(void* data, size_t n_bytes) {
+    DENTER("Vulkan::Buffer::set");
+
+    // Check if the correct bit is set
+    if (!(this->vk_mem_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+        DLOG(fatal, "Tried to populate buffer that is not visible by the host.");
+    }
+    // Check if the target buffer has enough memory
+    if (this->vk_buffer_size < (VkDeviceSize) n_bytes) {
+        DLOG(fatal, "Not enough memory in buffer to accept data of " + std::to_string(n_bytes) + " bytes (buffer has " + std::to_string(this->vk_buffer_size) + " bytes).");
+    }
+
+    // If so, then set map the device memory in the buffer to host memory
+    void* mapped_memory;
+    if (vkMapMemory(this->device, this->vk_memory, 0, (VkDeviceSize) n_bytes, 0, &mapped_memory) != VK_SUCCESS) {
+        DLOG(fatal, "Could not map buffer memory to host memory.");
+    }
+
+    // Once mapped, copy the memory over
+    memcpy(mapped_memory, data, n_bytes);
+
+    // Next, flush the memory to the device if the cache is not coherent
+    if (!(this->vk_mem_property_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+        VkMappedMemoryRange memory_range{};
+        memory_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        // Set the mapped memory to flush
+        memory_range.memory = this->vk_memory;
+        // Set the offset for this memory (always 0, until we implemented an allocator)
+        memory_range.offset = 0;
+        // Set the size of this memory range
+        memory_range.size = n_bytes;
+
+        // Now flush the memory
+        if (vkFlushMappedMemoryRanges(this->device, 1, &memory_range) != VK_SUCCESS) {
+            DLOG(fatal, "Could not flush mapped memory region back to device.");
+        }
+    }
+
+    // With that done, unmap the memory
+    vkUnmapMemory(this->device, this->vk_memory);
+
+    DLEAVE;
+}
+
+/* Populates the buffer through a temporary staging buffer. Note that this buffer is recommended to have the VK_USAGE_TRANSFER_DST_BIT set, but it's not necessary. */
+void Buffer::set_staging(void* data, size_t data_size, const CommandPool& command_pool) {
+    DENTER("Vulkan::Buffer::set_staging");
+
+    // Create the staging buffer
+    Buffer staging_buffer(this->device, (VkDeviceSize) data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    // Populate it with the given data
+    staging_buffer.set(data, data_size);
+
+    // Use the copy call to move it to this buffer
+    Buffer::copy(*this, staging_buffer, command_pool);
+
+    // We're done (deallocation is done by RAII)
+    DLEAVE;
+}
+
+/* Returns the contents of the buffer by copying it in the given void pointer. Note that the buffer has to have the VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT flag set, and that it's assumed that the given array is at least size() bytes long. */
+void Buffer::get(void* data) {
+    DENTER("Vulkan::Buffer::get");
+
+    // Check if the correct bit is set
+    if (!(this->vk_mem_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+        DLOG(fatal, "Cannot read from buffer that is inaccessible by the host.");
+    }
+
+    // Try to map the memory
+    void* mapped_memory;
+    if (vkMapMemory(this->device, this->vk_memory, 0, this->vk_buffer_size, 0, &mapped_memory) != VK_SUCCESS) {
+        DLOG(fatal, "Could not map buffer memory to host memory.");
+    }
+
+    // Force a write in the memory if the coherent bit is not set
+    // Next, flush the memory to the device if the cache is not coherent
+    if (!(this->vk_mem_property_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+        VkMappedMemoryRange memory_range{};
+        memory_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        // Set the mapped memory to flush
+        memory_range.memory = this->vk_memory;
+        // Set the offset for this memory (always 0, until we implemented an allocator)
+        memory_range.offset = 0;
+        // Set the size of this memory range
+        memory_range.size = this->vk_buffer_size;
+
+        // Now flush the memory
+        if (vkInvalidateMappedMemoryRanges(this->device, 1, &memory_range) != VK_SUCCESS) {
+            DLOG(fatal, "Could not invalidate mapped memory region.");
+        }
+    }
+
+    // Copy the memory back
+    memcpy(data, mapped_memory, (size_t) this->vk_buffer_size);
+
+    // With that done, unmap the memory again
+    vkUnmapMemory(this->device, this->vk_memory);
 
     DLEAVE;
 }

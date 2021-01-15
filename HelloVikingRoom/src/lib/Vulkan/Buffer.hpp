@@ -61,6 +61,13 @@ namespace HelloVikingRoom::Vulkan {
         /* Copies one Buffer to the other. Both buffers must be on the same device, and the source buffer must have VK_BUFFER_USAGE_TRANSFER_SRC_BIT and the destination buffer VK_BUFFER_TRANSFER_DST_BIT. Additionally, the destination buffer must have at least as many bytes allocated as the source one. The final argument is the command pool where we'll create the temporary command buffer for the copy. */
         static void copy(Buffer& destination, const Buffer& source, const CommandPool& command_pool);
 
+        /* Populates the buffer directly, by mapping the appropriate device memory to host memory and then copying the data in the given array. Note that to do this, this array must have VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT set. */
+        void set(void* data, size_t data_size);
+        /* Populates the buffer through a temporary staging buffer. Note that this buffer is recommended to have the VK_USAGE_TRANSFER_DST_BIT set, but it's not necessary. */
+        void set_staging(void* data, size_t data_size, const CommandPool& command_pool);
+        /* Returns the contents of the buffer by copying it in the given void pointer. Note that the buffer has to have the VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT flag set, and that it's assumed that the given array is at least size() bytes long. */
+        void get(void* data);
+
         /* Returns the size (in bytes) of this buffer. */
         inline VkDeviceSize size() const { return this->vk_buffer_size; }
 
