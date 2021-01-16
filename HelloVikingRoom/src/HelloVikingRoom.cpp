@@ -33,7 +33,7 @@
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/UniformBuffer.hpp"
+#include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/Semaphore.hpp"
 #include "Vulkan/Fence.hpp"
 #include "Vulkan/RenderPasses/SquarePass.hpp"
@@ -270,7 +270,8 @@ void resize_swapchain(
     Array<Vulkan::CommandBuffer>& command_buffers,
     const Vulkan::Buffer& vertex_buffer,
     const Vulkan::Buffer& index_buffer,
-    Array<Vulkan::Buffer>& uniform_buffers
+    Array<Vulkan::Buffer>& uniform_buffers,
+    Vulkan::DescriptorPool& descriptor_pool
 ) {
     DENTER("resize_swapchain");
 
@@ -286,11 +287,12 @@ void resize_swapchain(
     // Next, wait until the device is idle before we re-create half of it
     device.wait_idle();
 
-    // Now, re-create the swapchain, render pass and graphics pipeline
+    // Now, re-create the swapchain, render pass, graphics pipeline and the descriptor pool
     device.refresh_info(window);
     swapchain.resize(window);
     render_pass.resize(swapchain);
     graphics_pipeline.resize(swapchain, render_pass);
+    descriptor_pool.resize(static_cast<uint32_t>(swapchain.images().size()), static_cast<uint32_t>(swapchain.images().size()));
 
     // Re-create the unchanged part of the framebuffers and the command buffers
     framebuffers.reserve(swapchain.imageviews().size());
@@ -360,7 +362,7 @@ void update_uniform_buffer(Array<Vulkan::Buffer>& uniform_buffers, const Vulkan:
     // Finally, the projection matrix, which has a field-of-view of 45 degrees and uses the swapchain to keep the aspect ratio equal to the window size.
     // The final two parameters are the near plane and the far plane; presumably the locations of the near and far 'square' of the camera trapezium
     translations.proj = glm::perspective(glm::radians(45.0f), (float) swapchain.extent().width / (float) swapchain.extent().height, 0.1f, 10.0f);
-    // Don't forget to flip the Y-axis of the translation matrix, though, as this library is for OpenGL and that uses an inverted Y-axis
+    // Don't forget to flip the Y-axis of the translation matrix (we flip the Y-scalar), though, as this library is for OpenGL and that uses an inverted Y-axis
     translations.proj[1][1] *= -1;
 
     // Next, we update all the uniform buffer for the current image
@@ -447,6 +449,9 @@ int main() {
             ));
         }
 
+        // Create the descriptor pool for the uniform buffers
+        Vulkan::DescriptorPool descriptor_pool(device, static_cast<uint32_t>(swapchain.images().size()), static_cast<uint32_t>(swapchain.images().size()));
+
         // Create the command buffers for each frame in the swapchain
         Array<Vulkan::CommandBuffer> command_buffers = command_pool.get_buffer(framebuffers.size(), VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         for (size_t i = 0; i < command_buffers.size(); i++) {
@@ -510,7 +515,8 @@ int main() {
                     command_buffers,
                     vertex_buffer,
                     index_buffer,
-                    uniform_buffers
+                    uniform_buffers,
+                    descriptor_pool
                 );
                 image_ready_semaphores[current_frame].reset();
                 continue;
