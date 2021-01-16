@@ -30,6 +30,10 @@ namespace HelloVikingRoom::Vulkan {
         VkImage vk_image;
         /* The memory allocated on the device for this image. */
         VkDeviceMemory vk_memory;
+
+        /* The VkImageView object used to, well, view this image. */
+        VkImageView vk_image_view;
+
         /* The current size of the image. */
         VkExtent2D vk_extent;
         /* The current format of the image. */
@@ -67,10 +71,14 @@ namespace HelloVikingRoom::Vulkan {
         inline const VkImage& image() const { return this->vk_image; }
         /* Explicitly returns the internal VkDeviceMemory object. */
         inline const VkDeviceMemory& memory() const { return this->vk_memory; }
+        /* Explicitly returns the internal VkImageView object. */
+        inline const VkImageView& image_view() const { return this->vk_image_view; }
         /* Implicitly casts this class to a VkImage by returning the internal object. */
         inline operator VkImage() const { return this->vk_image; }
         /* Implicitly casts this class to a VkDeviceMemory by returning the internal object. */
         inline operator VkDeviceMemory() const { return this->vk_memory; }
+        /* Implicitly casts this class to a VkImageView by returning the internal object. */
+        inline operator VkImageView() const { return this->vk_image_view; }
         
     };
 }

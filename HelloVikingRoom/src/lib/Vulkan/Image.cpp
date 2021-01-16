@@ -121,6 +121,30 @@ Image::Image(const Device& device, CommandPool& command_pool, const std::string&
 
 
 
+    /***** STEP 4: CREATE THE IMAGE VIEW TO THIS IMAGE *****/
+    // It's a create info struct, as usual
+    VkImageViewCreateInfo view_info{};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    // Set the image to view
+    view_info.image = this->vk_image;
+    // Set the type of the image (a normal 2D-image)
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    // Set the format of the image
+    view_info.format = this->vk_format;
+    // Set the range of the image to view (everything)
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.baseMipLevel = 0;
+    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.baseArrayLayer = 0;
+    view_info.subresourceRange.layerCount = 1;
+
+    // Create the image view as a class and we're done
+    if (vkCreateImageView(this->device, &view_info, nullptr, &this->vk_image_view) != VK_SUCCESS) {
+        DLOG(fatal, "Could not create image view to image.");
+    }
+
+
+
     // Done
     DLEAVE;
 }
@@ -129,10 +153,15 @@ Image::Image(const Device& device, CommandPool& command_pool, const std::string&
 Image::Image(Image&& other) :
     vk_image(other.vk_image),
     vk_memory(other.vk_memory),
+    vk_image_view(other.vk_image_view),
+    vk_extent(other.vk_extent),
+    vk_format(other.vk_format),
+    vk_layout(other.vk_layout),
     device(other.device)
 {
     other.vk_image = nullptr;
     other.vk_memory = nullptr;
+    other.vk_image_view = nullptr;
 }
 
 /* Destructor for the Image class. */
@@ -140,6 +169,9 @@ Image::~Image() {
     DENTER("Vulkan::Image::~Image");
     DLOG(info, "Cleaning Vulkan image...");
 
+    if (this->vk_image_view != nullptr) {
+        vkDestroyImageView(this->device, this->vk_image_view, nullptr);
+    }
     if (this->vk_image != nullptr) {
         vkDestroyImage(this->device, this->vk_image, nullptr);
     }
