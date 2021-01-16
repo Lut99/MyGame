@@ -70,6 +70,8 @@ namespace HelloVikingRoom::Vulkan {
 
         /* Returns the size (in bytes) of this buffer. */
         inline VkDeviceSize size() const { return this->vk_buffer_size; }
+        /* Returns the offset of the buffer. For now, is always 0, but will be useful when we implement our own allocator. */
+        inline VkDeviceSize offset() const { return 0; }
 
         /* Returns the usage flags set for this buffer. */
         inline VkBufferUsageFlags usage() const { return this->vk_usage_flags; }

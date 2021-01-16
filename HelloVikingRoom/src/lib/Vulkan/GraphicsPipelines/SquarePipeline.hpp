@@ -24,8 +24,8 @@ namespace HelloVikingRoom::Vulkan::GraphicsPipelines {
     /* The SquarePipeline class, which defines the pipeline that is used to render the square from HelloTriangle. */
     class SquarePipeline: public GraphicsPipeline {
     public:
-        /* Constructor for the SquarePipeline class, which takes the device to create the pipeline on, a swapchain to deduce the image format from and a render pass to render in the pipeline. */
-        SquarePipeline(const Device& device, const Swapchain& swapchain, const RenderPass& render_pass);
+        /* Constructor for the SquarePipeline class, which takes the device to create the pipeline on, a swapchain to deduce the image format from, a render pass to render in the pipeline and the layouts for the used descriptor sets. */
+        SquarePipeline(const Device& device, const Swapchain& swapchain, const RenderPass& render_pass, const Tools::Array<VkDescriptorSetLayout>& descriptor_set_layouts);
         /* Copy constructor for the SquarePipeline class, which is deleted. */
         SquarePipeline(const SquarePipeline& other) = delete;
         /* Move constructor for the SquarePipeline class. */

@@ -25,8 +25,8 @@ using namespace Debug::SeverityValues;
 
 
 /***** SQUAREPIPELINE CLASS *****/
-/* Constructor for the SquarePipeline class, which takes the device to create the pipeline on, a swapchain to deduce the image format from and a render pass to render in the pipeline. */
-SquarePipeline::SquarePipeline(const Device& device, const Swapchain& swapchain, const RenderPass& render_pass) :
+/* Constructor for the SquarePipeline class, which takes the device to create the pipeline on, a swapchain to deduce the image format from, a render pass to render in the pipeline and the layouts for the used descriptor sets. */
+SquarePipeline::SquarePipeline(const Device& device, const Swapchain& swapchain, const RenderPass& render_pass, const Tools::Array<VkDescriptorSetLayout>& descriptor_set_layouts) :
     GraphicsPipeline(device)
 {
     DENTER("Vulkan::GraphicsPipelines::SquarePipeline::SquarePipeline");
@@ -118,7 +118,8 @@ SquarePipeline::SquarePipeline(const Device& device, const Swapchain& swapchain,
     // Next, tell the rasterizer how to 'cull'; i.e., whether it should remove no sides of all objects, the front side, the backside or no side
     this->vk_rasterizer_state.cullMode = VK_CULL_MODE_BACK_BIT;
     // Determines how the rasterizer knows if it's a front or back. Can be clockwise or counterclockwise (however that may work)
-    this->vk_rasterizer_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    // Set the counterclockwise as our transformation matrices have flipped Y-axis
+    this->vk_rasterizer_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     // We won't do anything depth-related for now, so the next four values are just set to 0 and false etc
     this->vk_rasterizer_state.depthBiasEnable = VK_FALSE;
     this->vk_rasterizer_state.depthBiasConstantFactor = 0.0f; // Optional
@@ -177,8 +178,8 @@ SquarePipeline::SquarePipeline(const Device& device, const Swapchain& swapchain,
     // Now it's time to look at the layout of our pipeline. This is used to be able to change shader constants at draw time rather than compile time
     this->vk_pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     // For now, we just set everything to empty, since we don't do any fancy dynamic stuff yet
-    this->vk_pipeline_layout_info.setLayoutCount = 0;
-    this->vk_pipeline_layout_info.pSetLayouts = nullptr;
+    this->vk_pipeline_layout_info.setLayoutCount = static_cast<uint32_t>(descriptor_set_layouts.size());
+    this->vk_pipeline_layout_info.pSetLayouts = descriptor_set_layouts.rdata();
     this->vk_pipeline_layout_info.pushConstantRangeCount = 0;
     this->vk_pipeline_layout_info.pPushConstantRanges = nullptr;
 

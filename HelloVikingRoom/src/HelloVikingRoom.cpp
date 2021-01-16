@@ -204,7 +204,8 @@ void record_command_buffer(
     const Vulkan::Swapchain& swapchain,
     const Vulkan::Framebuffer& framebuffer,
     const Vulkan::Buffer& vertex_buffer,
-    const Vulkan::Buffer& index_buffer
+    const Vulkan::Buffer& index_buffer,
+    const Vulkan::DescriptorSetRef& descriptor_set
 ) {
     DENTER("record_command_buffer");
     DLOG(info, "Recording command buffer...");
@@ -240,6 +241,9 @@ void record_command_buffer(
     // Also bind the index buffer, specifying its type
     vkCmdBindIndexBuffer(command_buffer, index_buffer, 0, VK_INDEX_TYPE_UINT16);
 
+    // Before we draw, bind the uniform buffers via their descriptors
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline.pipeline_layout(), 0, 1, &descriptor_set.descriptor_set(), 0, nullptr);
+
     // We have told it how to start and how to render - all we have to tell it is what to render
     // Here, we pass the following information:
     //   - The command buffer that should start drawing
@@ -271,7 +275,9 @@ void resize_swapchain(
     const Vulkan::Buffer& vertex_buffer,
     const Vulkan::Buffer& index_buffer,
     Array<Vulkan::Buffer>& uniform_buffers,
-    Vulkan::DescriptorPool& descriptor_pool
+    Vulkan::DescriptorPool& descriptor_pool,
+    const Vulkan::DescriptorSetLayout& descriptor_layout,
+    Array<Vulkan::DescriptorSetRef>& descriptor_sets
 ) {
     DENTER("resize_swapchain");
 
@@ -287,12 +293,11 @@ void resize_swapchain(
     // Next, wait until the device is idle before we re-create half of it
     device.wait_idle();
 
-    // Now, re-create the swapchain, render pass, graphics pipeline and the descriptor pool
+    // Now, re-create the swapchain, render pass and graphics pipeline
     device.refresh_info(window);
     swapchain.resize(window);
     render_pass.resize(swapchain);
     graphics_pipeline.resize(swapchain, render_pass);
-    descriptor_pool.resize(static_cast<uint32_t>(swapchain.images().size()), static_cast<uint32_t>(swapchain.images().size()));
 
     // Re-create the unchanged part of the framebuffers and the command buffers
     framebuffers.reserve(swapchain.imageviews().size());
@@ -300,15 +305,6 @@ void resize_swapchain(
     size_t to_resize = std::min(framebuffers.size(), swapchain.imageviews().size());
     for (size_t i = 0; i < to_resize; i++) {
         framebuffers[i].resize(swapchain.imageviews()[i], swapchain, render_pass);
-        record_command_buffer(
-            command_buffers[i],
-            graphics_pipeline,
-            render_pass,
-            swapchain,
-            framebuffers[i],
-            vertex_buffer,
-            index_buffer
-        );
     }
 
     // Create new framebuffers, command buffers & uniform buffers if the new swapchain size is larger than before
@@ -319,6 +315,23 @@ void resize_swapchain(
         command_buffers.push_back(
             command_pool.get_buffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
         );
+        uniform_buffers.push_back(Vulkan::Buffer(
+            device,
+            sizeof(UniformBufferObject),
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+        ));
+    }
+
+    // Also update all the descriptor pool and all its sets
+    descriptor_pool.resize(static_cast<uint32_t>(swapchain.images().size()), static_cast<uint32_t>(swapchain.images().size()));
+    descriptor_sets = descriptor_pool.get_descriptor(static_cast<uint32_t>(swapchain.images().size()), descriptor_layout);
+    for (size_t i = 0; i < descriptor_sets.size(); i++) {
+        descriptor_sets[i].set(uniform_buffers[i]);
+    }
+
+    // Next, record all command buffers again with all the re-done structures
+    for (size_t i = 0; i < command_buffers.size(); i++) {
         record_command_buffer(
             command_buffers[i],
             graphics_pipeline,
@@ -326,14 +339,9 @@ void resize_swapchain(
             swapchain,
             framebuffers[i],
             vertex_buffer,
-            index_buffer
+            index_buffer,
+            descriptor_sets[i]
         );
-        uniform_buffers.push_back(Vulkan::Buffer(
-            device,
-            sizeof(UniformBufferObject),
-            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-        ));
     }
 
     // Finally, reset the window resize state and we're done
@@ -416,10 +424,11 @@ int main() {
 
         // Create the descriptor layout to bind the uniform buffer for the transformation matrices
         Vulkan::DescriptorSetLayout descriptor_set_layout(device, VK_SHADER_STAGE_VERTEX_BIT);
+        Array<VkDescriptorSetLayout> descriptor_set_layouts({ descriptor_set_layout });
 
         // Create our only render pass (for now), and use that to create a graphics pipeline
         Vulkan::RenderPasses::SquarePass render_pass(device, swapchain);
-        Vulkan::GraphicsPipelines::SquarePipeline pipeline(device, swapchain, render_pass);
+        Vulkan::GraphicsPipelines::SquarePipeline pipeline(device, swapchain, render_pass, descriptor_set_layouts);
 
         // Create the framebuffers
         Array<Vulkan::Framebuffer> framebuffers(swapchain.imageviews().size());
@@ -449,8 +458,12 @@ int main() {
             ));
         }
 
-        // Create the descriptor pool for the uniform buffers
+        // Create the descriptor pool for the uniform buffers and get the sets from that
         Vulkan::DescriptorPool descriptor_pool(device, static_cast<uint32_t>(swapchain.images().size()), static_cast<uint32_t>(swapchain.images().size()));
+        Array<Vulkan::DescriptorSetRef> descriptor_sets = descriptor_pool.get_descriptor(static_cast<uint32_t>(swapchain.images().size()), descriptor_set_layout);
+        for (size_t i = 0; i < descriptor_sets.size(); i++) {
+            descriptor_sets[i].set(uniform_buffers[i]);
+        }
 
         // Create the command buffers for each frame in the swapchain
         Array<Vulkan::CommandBuffer> command_buffers = command_pool.get_buffer(framebuffers.size(), VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -463,7 +476,8 @@ int main() {
                 swapchain,
                 framebuffers[i],
                 vertex_buffer,
-                index_buffer
+                index_buffer,
+                descriptor_sets[i]
             );
         }
 
@@ -516,7 +530,9 @@ int main() {
                     vertex_buffer,
                     index_buffer,
                     uniform_buffers,
-                    descriptor_pool
+                    descriptor_pool,
+                    descriptor_set_layout,
+                    descriptor_sets
                 );
                 image_ready_semaphores[current_frame].reset();
                 continue;
@@ -601,7 +617,10 @@ int main() {
                     command_buffers,
                     vertex_buffer,
                     index_buffer,
-                    uniform_buffers
+                    uniform_buffers,
+                    descriptor_pool,
+                    descriptor_set_layout,
+                    descriptor_sets
                 );
                 image_ready_semaphores[current_frame].reset();
                 continue;

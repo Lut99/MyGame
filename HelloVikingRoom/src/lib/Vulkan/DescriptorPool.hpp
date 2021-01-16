@@ -18,14 +18,57 @@
 
 #include <vulkan/vulkan.h>
 
-#include "Device.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/Buffer.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Tools/Array.hpp"
 
 namespace HelloVikingRoom::Vulkan {
+    /* Forward declaration of the DescriptorPool class. */
+    class DescriptorPool;
+
+    /* The DescriptorSetRef class, which references a DescriptorSet allocated in a certain DescriptorPool. */
+    class DescriptorSetRef {
+    private:
+        /* The VkDescriptorSet class that this struct wraps. */
+        VkDescriptorSet vk_descriptor_set;
+
+        /* Constructor for the DescriptorSetRef class, which takes the pool where it is bound and the ready-made VkDescriptorSet to wrap. */
+        DescriptorSetRef(const DescriptorPool& descriptor_pool, VkDescriptorSet descriptor_set);
+
+        /* Mark the DescriptorPool as friend. */
+        friend class DescriptorPool;
+    
+    public:
+        /* Constant reference to the DescriptorPool where this set is allocated. */
+        const DescriptorPool& pool;
+
+        /* Copy constructor for the DescriptorSetRef class. */
+        DescriptorSetRef(const DescriptorSetRef& other);
+        /* Move constructor for the DescriptorSetRef class. */
+        DescriptorSetRef(DescriptorSetRef&& other);
+        /* Destructor for the DescriptorSetRef class. */
+        ~DescriptorSetRef();
+
+        /* Binds this descriptor set to a given (uniform) buffer. */
+        void set(const Buffer& buffer);
+
+        /* Explicitly returns the internal VkDescriptorSet object. */
+        inline const VkDescriptorSet& descriptor_set() const { return this->vk_descriptor_set; }
+        /* Implicitly casts this class to a VkDescriptorSet by returning the internal object. */
+        inline operator VkDescriptorSet() const { return this->vk_descriptor_set; }
+
+    };
+
+
+
     /* The DescriptorPool class, which manages memory for the DescriptorSets. */
     class DescriptorPool {
     private:
         /* The internal VkDescriptorPool object that this class wraps. */
         VkDescriptorPool vk_descriptor_pool;
+        /* The list of VkDescriptorSet classes allocated by this pool. */
+        Tools::Array<VkDescriptorSet> vk_descriptor_sets;
 
     public:
         /* Constant reference to the device that his pool is bound to. */
@@ -44,7 +87,12 @@ namespace HelloVikingRoom::Vulkan {
         /* Destructor for the DescriptorPool class. */
         ~DescriptorPool();
 
-        /* Resizes the pool to allow a new number of swapchain images. */
+        /* Internally allocated a new DescriptorSet with the given layout, and returns a reference for it. */
+        DescriptorSetRef get_descriptor(const DescriptorSetLayout& descriptor_set_layout);
+        /* Internally allocated N new DescriptorSets with the given layout, and returns a reference for each of those. */
+        Tools::Array<DescriptorSetRef> get_descriptor(size_t N, const DescriptorSetLayout& descriptor_set_layout);
+
+        /* Resizes the pool to allow a new number of swapchain images. Note that this invalidates all existing descriptor set references. */
         void resize(uint32_t n_descriptors, uint32_t n_sets);
 
         /* Expliticly returns the internal VkDescriptorPool object. */
