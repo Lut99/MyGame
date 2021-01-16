@@ -32,6 +32,7 @@
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Buffer.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/Semaphore.hpp"
@@ -471,6 +472,9 @@ int main() {
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
             ));
         }
+
+        // Load the texture image
+        Vulkan::Image texture(device, command_pool, "textures/texture.jpg", VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
         // Create the descriptor pool for the uniform buffers and get the sets from that
         Vulkan::DescriptorPool descriptor_pool(device, static_cast<uint32_t>(swapchain.images().size()), static_cast<uint32_t>(swapchain.images().size()));

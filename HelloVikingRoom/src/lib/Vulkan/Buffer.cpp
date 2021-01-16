@@ -164,21 +164,7 @@ void Buffer::copy(Buffer& destination, const Buffer& source, CommandPool& comman
     vkCmdCopyBuffer(command_buffer, source, destination, 1, &copy_region);
 
     // Since that's all we wanna do, we're done here
-    command_buffer.end();
-
-    // Next, we'll submit the command buffer to the graphics queue so it can copy
-    VkSubmitInfo submit_info{};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &command_buffer.command_buffer();
-
-    // Submit the command buffer, and then wait until the copying is done
-    if (vkQueueSubmit(destination.device.graphics_queue(), 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
-        DLOG(fatal, "Could not submit temporary command buffer to graphics queue.");
-    }
-    if (vkQueueWaitIdle(destination.device.graphics_queue()) != VK_SUCCESS) {
-        DLOG(fatal, "Something went wrong while waiting for graphics queue to finish copying.");
-    }
+    command_buffer.end(destination.device.graphics_queue());
 
     DLEAVE;
 }

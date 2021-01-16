@@ -53,6 +53,8 @@ namespace HelloVikingRoom::Vulkan {
         void begin(VkCommandBufferUsageFlags flags = 0);
         /* Stops recording the command buffer. */
         void end();
+        /* Stops recording the command buffer and immediately submits it to the given VkQueue object. */
+        void end(const VkQueue& queue);
 
         /* Expliticly returns the internal VkCommandBuffer object. */
         inline const VkCommandBuffer& command_buffer() const { return this->vk_command_buffer; }

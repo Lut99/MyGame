@@ -80,6 +80,33 @@ void CommandBuffer::end() {
     DRETURN;
 }
 
+/* Stops recording the command buffer and immediately submits it to the given VkQueue object. Only returns once the given queue is idle. */
+void CommandBuffer::end(const VkQueue& queue) {
+    DENTER("Vulkan::CommandBuffer::end(submit)");
+
+    // Stop with recording the command buffer
+    if (vkEndCommandBuffer(this->vk_command_buffer) != VK_SUCCESS) {
+        DLOG(fatal, "Could not finish recording the command buffer.");
+    }
+
+    // Prepare the struct to submit the queue information
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    // Attach our internal buffer object
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &this->vk_command_buffer;
+
+    // Submit to the queue and wait for it to finish
+    if (vkQueueSubmit(queue, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS) {
+        DLOG(fatal, "Could not submit command buffer to the given queue.");
+    }
+    if (vkQueueWaitIdle(queue) != VK_SUCCESS) {
+        DLOG(fatal, "Something went wrong while waiting for the given queue to be idle.");
+    }
+
+    DRETURN;
+}
+
 
 
 
