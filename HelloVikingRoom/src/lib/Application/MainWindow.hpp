@@ -38,9 +38,19 @@ namespace HelloVikingRoom {
 
         /* Indicates if the window recently resized or not. */
         bool did_resize;
+        /* Indicates if left has been pressed since last reset() call. */
+        bool left_down;
+        /* Indicates if a has been pressed since last reset() call. */
+        bool a_down;
+        /* Indicates if right has been pressed since last reset() call. */
+        bool right_down;
+        /* Indicates if d has been pressed since last reset() call. */
+        bool d_down;
 
         /* Function that is called when the window resizes. */
         static void GLFW_resize_callback(GLFWwindow* window, int new_width, int new_height);
+        /* Function that is called whenever a key is pressed/released. */
+        static void GLFW_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
     public:
         /* The title of the window. */
@@ -67,6 +77,10 @@ namespace HelloVikingRoom {
 
         /* Returns whether or not the window recently resized. */
         inline bool resized() const { return this->did_resize; }
+        /* Returns whether or not left/a was pressed since the last status update. */
+        inline bool left_pressed() const { return this->left_down | this->a_down; }
+        /* Returns whether or not right/d was pressed since the last status update. */
+        inline bool right_pressed() const { return this->right_down | this->d_down; }
         /* Resets the status of window resize back to false. */
         inline void reset_resized() { this->did_resize = false; }
 

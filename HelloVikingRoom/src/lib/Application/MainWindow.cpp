@@ -26,6 +26,10 @@ using namespace Debug::SeverityValues;
 /* Constructor for the MainWindow class, which takes a vulkan instance, the title of the window and its size (in pixels). */
 MainWindow::MainWindow(const Vulkan::Instance& instance, const std::string& title, int width, int height) :
     instance(instance),
+    left_down(false),
+    a_down(false),
+    right_down(false),
+    d_down(false),
     title(title),
     width(width),
     height(height)
@@ -42,9 +46,10 @@ MainWindow::MainWindow(const Vulkan::Instance& instance, const std::string& titl
         DLOG(fatal, "Could not initialize GLFW window");
     }
 
-    // Register the resize callback for this window
+    // Register the resize & mouse position callbacks for this window
     glfwSetWindowUserPointer(this->glfw_window, (void*) this);
     glfwSetFramebufferSizeCallback(this->glfw_window, MainWindow::GLFW_resize_callback);
+    glfwSetKeyCallback(this->glfw_window, MainWindow::GLFW_key_callback);
 
 
 
@@ -65,6 +70,11 @@ MainWindow::MainWindow(MainWindow&& other) :
     instance(other.instance),
     glfw_window(other.glfw_window),
     vk_surface(other.vk_surface),
+    did_resize(other.did_resize),
+    left_down(other.left_down),
+    a_down(other.a_down),
+    right_down(other.right_down),
+    d_down(other.d_down),
     title(other.title),
     width(other.width),
     height(other.height)
@@ -107,6 +117,42 @@ void MainWindow::GLFW_resize_callback(GLFWwindow* window, int new_width, int new
 
     // We're done
     DRETURN;
+}
+
+/* Function that is called whenever a key is pressed/released. */
+void MainWindow::GLFW_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    DENTER("MainWindow::GLFW_key_callback");
+
+    // Get a reference to our class
+    MainWindow* main_window = reinterpret_cast<MainWindow*>(glfwGetWindowUserPointer(window));
+
+    // Do only events we like
+    if (action != GLFW_PRESS && action != GLFW_RELEASE) { DRETURN; }
+    // But do remember which
+    bool new_state = action == GLFW_PRESS;
+
+    // Check the keys we're interested in
+    switch(key) {
+        case GLFW_KEY_LEFT:
+            main_window->left_down = new_state;
+            DRETURN;
+
+        case GLFW_KEY_A:
+            main_window->a_down = new_state;
+            DRETURN;
+        case GLFW_KEY_RIGHT:
+            main_window->right_down = new_state;
+            DRETURN;
+            
+        case GLFW_KEY_D:
+            main_window->d_down = new_state;
+            DRETURN;
+            
+        default:
+            // Do nothing
+            DRETURN;
+            
+    }
 }
 
 

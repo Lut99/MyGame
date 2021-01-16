@@ -350,21 +350,32 @@ void resize_swapchain(
 }
 
 /* Helper function that computes the new transformation matrices s.t. the image will nicely rotate. */
-void update_uniform_buffer(Array<Vulkan::Buffer>& uniform_buffers, const Vulkan::Swapchain& swapchain, uint32_t image_index) {
+void update_uniform_buffer(const MainWindow& window, Array<Vulkan::Buffer>& uniform_buffers, const Vulkan::Swapchain& swapchain, uint32_t image_index) {
     DENTER("update_uniform_buffer");
 
-    // Use a static variable to mark the beginning of the render time (i.e., first time the function is called)
-    static std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    
-    // Compute the time that has passed since then
-    std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
-    float time_passed = std::chrono::duration_cast<std::chrono::duration<float>>(now - start).count();
+    // Use a static variable to keep track of the last time the function was called
+    static std::chrono::high_resolution_clock::time_point last_update = std::chrono::high_resolution_clock::now();
+    // Use another static to keep track of how far we rotated
+    static float rotation_state = 0;
+
+    // Mod that by the amount move
+    if (window.left_pressed()) {
+        // Compute the time that has passed since last call
+        std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+        // Add that to the rotation state
+        rotation_state += std::chrono::duration_cast<std::chrono::duration<float>>(now - last_update).count();
+    } else if (window.right_pressed()) {
+        // Compute the time that has passed since last call
+        std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
+        // Add that to the rotation state (inverted since we got the other way)
+        rotation_state -= std::chrono::duration_cast<std::chrono::duration<float>>(now - last_update).count();
+    }
 
     // Define the translation matrices
     UniformBufferObject translations{};
     // First we translate the model to world space; in this case, we rotate it over the Z-axis (last vec) by 90 degrees, depending on the amount of time passed
     // Since it's the first translation, we start with the unit matrix
-    translations.model = glm::rotate(glm::mat4(1.0f), time_passed * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    translations.model = glm::rotate(glm::mat4(1.0f), rotation_state * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     // Next, we add the view matrix. It will be lookup straight at the square, but then above and away (2, 2, 2) from 45 degrees down. The up axis is here defined to be the Z-axis.
     translations.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     // Finally, the projection matrix, which has a field-of-view of 45 degrees and uses the swapchain to keep the aspect ratio equal to the window size.
@@ -375,6 +386,9 @@ void update_uniform_buffer(Array<Vulkan::Buffer>& uniform_buffers, const Vulkan:
 
     // Next, we update all the uniform buffer for the current image
     uniform_buffers[image_index].set((void*) &translations, sizeof(UniformBufferObject));
+
+    // Note that we updated this the last time
+    last_update = std::chrono::high_resolution_clock::now();
 
     DRETURN;
 }
@@ -553,7 +567,7 @@ int main() {
             image_in_flight_fences[image_index] = frame_in_flight_fences[current_frame];
 
             // Call our update function
-            update_uniform_buffer(uniform_buffers, swapchain, image_index);
+            update_uniform_buffer(window, uniform_buffers, swapchain, image_index);
 
 
 
