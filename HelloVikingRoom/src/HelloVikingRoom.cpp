@@ -52,11 +52,11 @@ using namespace Debug::SeverityValues;
 /* The UniformBufferObject is used to pass transformation matrices to shaders. */
 struct UniformBufferObject {
     /* The model matrix, which moves an object from model space (where the model's at 0, 0, 0) to world space. I.e., encodes the position of our model in the world. */
-    glm::mat4 model;
+    alignas(16) glm::mat4 model;
     /* The view matrix, i.e., the camera. In mathmatical terms: translates all models in world space to camera space, where the camera is at (0, 0, 0). */
-    glm::mat4 view;
+    alignas(16) glm::mat4 view;
     /* The projection matrix transforms the camera space to homogeneous space, which translates the normally-skewed camera box (trapezium-like) to a square so it's much easier to run the shaders. */
-    glm::mat4 proj;
+    alignas(16) glm::mat4 proj;
 };
 
 
